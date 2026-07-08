@@ -1,0 +1,2767 @@
+==================== C:\Users\DELL\Desktop\Automation\src\index.js ====================
+#!/usr/bin/env node
+
+const { testPriorityRouting } = require("./tests/01-priority-routing");
+const { testFailoverRouting } = require("./tests/02-failover-routing");
+const { testHybridRouting } = require("./tests/03-hybrid-routing");
+const { testDefaultRouting } = require("./tests/04-default-routing");
+const { testRetryLogic } = require("./tests/05-retry-logic");
+const { testMDRCalculation } = require("./tests/06-mdr-calculation");
+const { testWebhookProcessing } = require("./tests/07-webhook-processing");
+const { testEndToEndFlow } = require("./tests/08-end-to-end-flow");
+const { testMixedStatus } = require("./tests/09-mixed-status");
+const { logSection, logSuccess, logError, logInfo } = require("./utils/logger");
+const fs = require("fs");
+const path = require("path");
+
+async function runAllTests() {
+  console.log(`
+  ╔════════════════════════════════════════════════════════════╗
+  ║                                                            ║
+  ║     🚀 PAY-IN ROUTING LOGIC AUTOMATION TEST SUITE         ║
+  ║                                                            ║
+  ║     Testing: Priority | Failover | Hybrid | Default        ║
+  ║              Retry | MDR | Webhook | End-to-End           ║
+  ║              Mixed Status (NEW!)                          ║
+  ║                                                            ║
+  ║     Start Time: ${new Date().toLocaleString()}                     ║
+  ║                                                            ║
+  ╚════════════════════════════════════════════════════════════╝
+  `);
+
+  const results = {};
+  let totalTests = 0;
+  let totalPassed = 0;
+
+  try {
+    // Test 1: Priority Routing
+    const r1 = await testPriorityRouting();
+    results.priorityRouting = r1;
+    totalTests += r1.total || 0;
+    totalPassed += r1.passed || 0;
+
+    // Test 2: Failover Routing
+    const r2 = await testFailoverRouting();
+    results.failoverRouting = r2;
+
+    // Test 3: Hybrid Routing
+    const r3 = await testHybridRouting();
+    results.hybridRouting = r3;
+    totalTests += r3.total || 0;
+    totalPassed += r3.passed || 0;
+
+    // Test 4: Default Routing
+    const r4 = await testDefaultRouting();
+    results.defaultRouting = r4;
+
+    // Test 5: Retry Logic
+    const r5 = await testRetryLogic();
+    results.retryLogic = r5;
+
+    // Test 6: MDR Calculation
+    const r6 = await testMDRCalculation();
+    results.mdrCalculation = r6;
+    totalTests += r6.total || 0;
+    totalPassed += r6.passed || 0;
+
+    // Test 7: Webhook Processing
+    const r7 = await testWebhookProcessing();
+    results.webhookProcessing = r7;
+    totalTests += r7.total || 0;
+    totalPassed += r7.passed || 0;
+
+    // Test 8: End-to-End Flow
+    const r8 = await testEndToEndFlow();
+    results.endToEndFlow = r8;
+
+    // Test 9: Mixed Status
+    const r9 = await testMixedStatus();
+    results.mixedStatus = r9;
+    totalTests += r9.total || 0;
+    totalPassed += r9.passed || 0;
+
+  } catch (error) {
+    logError(`Test suite failed: ${error.message}`);
+  }
+
+  // Generate Final Report
+  logSection("📊 FINAL TEST REPORT");
+  console.log(`
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │                     TEST SUMMARY                                    │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │  Total Tests Run:   ${String(totalTests).padStart(5)}                                                  │
+  │  Tests Passed:      ${String(totalPassed).padStart(5)}                                                 │
+  │  Tests Failed:      ${String(totalTests - totalPassed).padStart(5)}                                    │
+  │  Pass Rate:         ${((totalPassed / totalTests) * 100 || 0).toFixed(1).padStart(5)}%                 │
+  │                                                                                                        │
+  │  Status:            ${totalPassed === totalTests ? "✅ ALL TESTS PASSED" : "❌ SOME TESTS FAILED"}    │
+  └─────────────────────────────────────────────────────────────────────┘
+  `);
+
+  // Save report to file
+  const report = {
+    timestamp: new Date().toISOString(),
+    summary: {
+      totalTests,
+      passed: totalPassed,
+      failed: totalTests - totalPassed,
+      passRate: `${((totalPassed / totalTests) * 100 || 0).toFixed(1)}%`,
+    },
+    results,
+  };
+
+  const reportDir = path.join(__dirname, "../reports");
+  if (!fs.existsSync(reportDir)) {
+    fs.mkdirSync(reportDir, { recursive: true });
+  }
+
+  fs.writeFileSync(
+    path.join(reportDir, "test-report.json"),
+    JSON.stringify(report, null, 2),
+  );
+
+  logSuccess(`📄 Report saved to: reports/test-report.json`);
+
+  return report;
+}
+
+// Run if called directly
+if (require.main === module) {
+  runAllTests()
+    .then(() => {
+      console.log("\n✅ Test suite completed successfully!");
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error("\n❌ Test suite failed:", error.message);
+      process.exit(1);
+    });
+}
+
+module.exports = { runAllTests };
+
+==================== C:\Users\DELL\Desktop\Automation\src\api\auth.js ====================
+const axios = require('axios');
+const config = require('../config');
+const { logger, logSuccess, logError, logInfo } = require('../utils/logger');
+
+/**
+ * Login user and get access token + client secret
+ * @param {string} email - User email
+ * @param {string} password - User password
+ * @returns {Promise<{accessToken: string, clientSecret: string, user: object}>}
+ */
+async function loginUser(email, password) {
+  try {
+    const url = `${config.BASE_URL}${config.API_PATHS.LOGIN}`;
+    const payload = { email, password };
+    
+    logInfo(`Logging in: ${email}`);
+    
+    const response = await axios.post(url, payload, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (response.data.success) {
+      const { accessToken, user } = response.data.data;
+      const clientSecret = user.clientSecret;
+      
+      logSuccess(`Login successful for ${email}`);
+      logInfo(`Merchant ID: ${user.merchantId}`);
+      
+      return {
+        accessToken,
+        clientSecret,
+        user: {
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName,
+          role: user.role,
+          merchantId: user.merchantId
+        }
+      };
+    } else {
+      throw new Error(response.data.message || 'Login failed');
+    }
+  } catch (error) {
+    logError(`Login failed for ${email}: ${error.message}`);
+    if (error.response) {
+      logError(`Status: ${error.response.status}`);
+      logError(`Response: ${JSON.stringify(error.response.data)}`);
+    }
+    throw error;
+  }
+}
+
+module.exports = { loginUser };
+
+==================== C:\Users\DELL\Desktop\Automation\src\api\payin.js ====================
+const axios = require('axios');
+const config = require('../config');
+const { generateSignature, generateMerchantReference } = require('../utils/crypto');
+const { randomCustomer, randomAmount, randomPaymentMode } = require('../utils/random');
+const { logger, logSuccess, logError, logInfo } = require('../utils/logger');
+
+/**
+ * Create a pay-in request
+ * @param {string} accessToken - Bearer token
+ * @param {string} clientSecret - Client secret for signature
+ * @param {object} options - Optional overrides
+ * @returns {Promise<{request: object, response: object}>}
+ */
+async function createPayIn(accessToken, clientSecret, options = {}) {
+  try {
+    const url = `${config.BASE_URL}${config.API_PATHS.PAYIN}`;
+    
+    // Generate unique merchant reference
+    const merchantReference = options.merchantReference || generateMerchantReference();
+    
+    // Generate signature
+    const signature = generateSignature(merchantReference, clientSecret);
+    
+    // Generate random customer data
+    const customer = options.customer || randomCustomer();
+    
+    // Generate random amount and payment mode
+    const amount = options.amount || randomAmount(config.TEST_CONFIG.MIN_AMOUNT, config.TEST_CONFIG.MAX_AMOUNT);
+    const currency = options.currency || 'INR';
+    const paymentMode = options.paymentMode || randomPaymentMode();
+    
+    const payload = {
+      amount,
+      currency,
+      merchantReference,
+      paymentMode,
+      customer
+    };
+    
+    logInfo(`Creating Pay-In: ${merchantReference} | ${paymentMode} | ₹${amount}`);
+    
+    const response = await axios.post(url, payload, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'x-signature': signature
+      }
+    });
+    
+    if (response.data && response.data.id) {
+      logSuccess(`Pay-In created: ID ${response.data.id} | Status: ${response.data.status}`);
+    }
+    
+    return {
+      request: {
+        payload,
+        signature,
+        merchantReference,
+        amount,
+        currency,
+        paymentMode,
+        customer
+      },
+      response: response.data
+    };
+    
+  } catch (error) {
+    logError(`Pay-In failed: ${error.message}`);
+    if (error.response) {
+      logError(`Status: ${error.response.status}`);
+      logError(`Response: ${JSON.stringify(error.response.data)}`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Create multiple pay-in requests
+ * @param {string} accessToken - Bearer token
+ * @param {string} clientSecret - Client secret
+ * @param {number} count - Number of transactions
+ * @returns {Promise<Array>}
+ */
+async function createMultiplePayIns(accessToken, clientSecret, count = 5) {
+  const results = [];
+  for (let i = 0; i < count; i++) {
+    try {
+      const result = await createPayIn(accessToken, clientSecret);
+      results.push({
+        success: true,
+        transaction: result,
+        index: i + 1
+      });
+    } catch (error) {
+      results.push({
+        success: false,
+        error: error.message,
+        index: i + 1
+      });
+    }
+  }
+  return results;
+}
+
+module.exports = { createPayIn, createMultiplePayIns };
+
+==================== C:\Users\DELL\Desktop\Automation\src\api\webhook.js ====================
+const axios = require('axios');
+const config = require('../config');
+const { logger, logSuccess, logError, logInfo } = require('../utils/logger');
+
+/**
+ * Simulate Cashfree webhook
+ * @param {object} data - Webhook payload
+ * @returns {Promise<object>}
+ */
+async function simulateCashfreeWebhook(data) {
+  return simulateWebhook('CASHFREE', data);
+}
+
+/**
+ * Simulate Razorpay webhook
+ * @param {object} data - Webhook payload
+ * @returns {Promise<object>}
+ */
+async function simulateRazorpayWebhook(data) {
+  return simulateWebhook('RAZORPAY', data);
+}
+
+/**
+ * Simulate Adyen webhook
+ * @param {object} data - Webhook payload
+ * @returns {Promise<object>}
+ */
+async function simulateAdyenWebhook(data) {
+  return simulateWebhook('ADYEN', data);
+}
+
+/**
+ * Simulate any webhook
+ * @param {string} gateway - 'CASHFREE', 'RAZORPAY', 'ADYEN'
+ * @param {object} data - Webhook payload
+ * @returns {Promise<object>}
+ */
+async function simulateWebhook(gateway, data) {
+  try {
+    const paths = {
+      CASHFREE: config.API_PATHS.WEBHOOKS.CASHFREE,
+      RAZORPAY: config.API_PATHS.WEBHOOKS.RAZORPAY,
+      ADYEN: config.API_PATHS.WEBHOOKS.ADYEN
+    };
+    
+    const url = `${config.BASE_URL}${paths[gateway]}`;
+    
+    logInfo(`Simulating ${gateway} webhook...`);
+    
+    const response = await axios.post(url, data, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    logSuccess(`${gateway} webhook processed`);
+    return response.data;
+    
+  } catch (error) {
+    logError(`${gateway} webhook failed: ${error.message}`);
+    if (error.response) {
+      logError(`Status: ${error.response.status}`);
+      logError(`Response: ${JSON.stringify(error.response.data)}`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Get sample webhook payloads
+ * @param {string} merchantReference - The merchant reference
+ * @param {number} amount - Payment amount
+ * @param {string} paymentMode - Payment mode
+ * @param {object} customer - Customer details
+ * @returns {object}
+ */
+function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
+  const amountInPaise = Math.round(amount * 100);
+  
+  // Cashfree payload
+  const cashfreePayload = {
+    type: 'PAYMENT_SUCCESS_WEBHOOK',
+    data: {
+      order: {
+        order_id: merchantReference,
+        order_amount: amount,
+        order_currency: 'INR',
+        order_status: 'PAID',
+        order_expiry_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        order_note: `Payment for order ${merchantReference}`,
+        created_at: new Date().toISOString()
+      },
+      payment: {
+        payment_id: `pay_${Math.random().toString(36).substr(2, 10)}`,
+        order_id: merchantReference,
+        payment_amount: amount,
+        payment_status: 'SUCCESS',
+        payment_method: paymentMode,
+        payment_time: new Date().toISOString(),
+        bank_reference: Math.random().toString().substr(2, 12),
+        utr: Math.random().toString().substr(2, 12),
+        acquirer_data: {
+          rrn: Math.random().toString().substr(2, 12)
+        },
+        customer_details: {
+          customer_name: customer.name,
+          customer_email: customer.email,
+          customer_phone: customer.phone
+        }
+      }
+    }
+  };
+
+  // Razorpay payload
+  const razorpayPayload = {
+    event: 'payment.captured',
+    payload: {
+      payment: {
+        entity: {
+          id: `pay_${Math.random().toString(36).substr(2, 10)}`,
+          entity: 'payment',
+          amount: amountInPaise,
+          currency: 'INR',
+          status: 'captured',
+          order_id: `order_${Math.random().toString(36).substr(2, 10)}`,
+          invoice_id: null,
+          international: false,
+          method: paymentMode.toLowerCase(),
+          amount_refunded: 0,
+          refund_status: null,
+          captured: true,
+          description: `Payment for ${merchantReference}`,
+          card_id: null,
+          bank: 'YES Bank',
+          wallet: null,
+          vpa: paymentMode === 'UPI' ? 'test@okhdfcbank' : null,
+          email: customer.email,
+          contact: customer.phone.replace(/[^0-9]/g, ''),
+          notes: {
+            merchant_order_id: merchantReference
+          },
+          fee: 0,
+          tax: 0,
+          error_code: null,
+          error_description: null,
+          error_source: null,
+          error_step: null,
+          error_reason: null,
+          acquirer_data: {
+            rrn: Math.random().toString().substr(2, 12)
+          },
+          created_at: Math.floor(Date.now() / 1000),
+          bank_reference: Math.random().toString().substr(2, 12)
+        }
+      },
+      order: {
+        entity: {
+          id: `order_${Math.random().toString(36).substr(2, 10)}`,
+          entity: 'order',
+          amount: amountInPaise,
+          amount_paid: amountInPaise,
+          amount_due: 0,
+          currency: 'INR',
+          receipt: merchantReference,
+          offer_id: null,
+          status: 'paid',
+          attempts: 1,
+          notes: {
+            merchant_order_id: merchantReference
+          },
+          created_at: Math.floor(Date.now() / 1000) - 60
+        }
+      }
+    },
+    created_at: Math.floor(Date.now() / 1000)
+  };
+
+  // Adyen payload
+  const adyenPayload = {
+    live: 'false',
+    notificationItems: [
+      {
+        NotificationRequestItem: {
+          additionalData: {
+            authCode: Math.random().toString().substr(2, 6),
+            avsResult: '0',
+            cvcResult: '0',
+            responseCode: '0000',
+            totalFraudScore: '0'
+          },
+          amount: {
+            currency: 'INR',
+            value: amountInPaise
+          },
+          eventCode: 'AUTHORISATION',
+          eventDate: new Date().toISOString(),
+          merchantAccountCode: 'HlleoCOM',
+          merchantReference: merchantReference,
+          paymentMethod: paymentMode.toLowerCase(),
+          pspReference: `AYDEN_PSP_REF_${Math.random().toString(36).substr(2, 10)}`,
+          reason: '0000:Authorised',
+          success: 'true'
+        }
+      }
+    ]
+  };
+
+  return {
+    cashfree: cashfreePayload,
+    razorpay: razorpayPayload,
+    adyen: adyenPayload
+  };
+}
+
+module.exports = {
+  simulateCashfreeWebhook,
+  simulateRazorpayWebhook,
+  simulateAdyenWebhook,
+  simulateWebhook,
+  getWebhookPayloads
+};
+
+==================== C:\Users\DELL\Desktop\Automation\src\config\index.js ====================
+require('dotenv').config();
+
+module.exports = {
+  BASE_URL: process.env.BASE_URL || 'http://localhost:4000',
+  API_PATHS: {
+    LOGIN: '/api/auth/user/login',
+    PAYIN: '/api/payin-requests',
+    WEBHOOKS: {
+      CASHFREE: '/api/webhooks/cashfree',
+      RAZORPAY: '/api/webhooks/razorpay',
+      ADYEN: '/api/webhooks/adyen'
+    }
+  },
+  TEST_CONFIG: {
+    TRANSACTIONS_PER_USER: parseInt(process.env.TRANSACTIONS_PER_USER) || 5,
+    MIN_AMOUNT: parseFloat(process.env.MIN_AMOUNT) || 10000,
+    MAX_AMOUNT: parseFloat(process.env.MAX_AMOUNT) || 50000,
+    PAYMENT_MODES: (process.env.PAYMENT_MODES || 'UPI,CARD,WALLET,NETBANKING').split(',')
+  },
+  GATEWAY_IDS: {
+    RAZORPAY: 1,
+    CASHFREE: 2,
+    ADYEN: 3,
+    CHARGEBEE: 4
+  }
+};
+
+==================== C:\Users\DELL\Desktop\Automation\src\config\routing.js ====================
+// // Expected routing rules based on database
+// module.exports = {
+//   // Merchant 1 (Aman Pandey)
+//   1: {
+//     priorities: [
+//       { gatewayId: 1, name: 'Razorpay', priority: 1, paymentModes: ['CARD', 'WALLET'] },
+//       { gatewayId: 2, name: 'Cashfree', priority: 2, paymentModes: ['UPI', 'CARD', 'WALLET'] },
+//       { gatewayId: 3, name: 'Adyen', priority: 3, paymentModes: ['UPI', 'WALLET'] }
+//     ],
+//     expectedGateway: {
+//       'CARD': { gatewayId: 1, name: 'Razorpay' },
+//       'WALLET': { gatewayId: 1, name: 'Razorpay' },
+//       'UPI': { gatewayId: 2, name: 'Cashfree' },
+//       'NETBANKING': { gatewayId: 1, name: 'Razorpay' }
+//     }
+//   },
+//   // Merchant 2 (Sonia Kalonia)
+//   2: {
+//     priorities: [
+//       { gatewayId: 1, name: 'Razorpay', priority: 1, paymentModes: ['CARD'] },
+//       { gatewayId: 2, name: 'Cashfree', priority: 2, paymentModes: ['UPI', 'CARD', 'WALLET'] },
+//       { gatewayId: 3, name: 'Adyen', priority: 3, paymentModes: ['UPI', 'WALLET'] }
+//     ],
+//     expectedGateway: {
+//       'CARD': { gatewayId: 1, name: 'Razorpay' },
+//       'UPI': { gatewayId: 2, name: 'Cashfree' },
+//       'WALLET': { gatewayId: 3, name: 'Adyen' },
+//       'NETBANKING': null,
+//     }
+//   },
+//   // Merchant 3 (Piyush Kirola) - No priorities configured (Default)
+//   3: {
+//     priorities: [],
+//     expectedGateway: {
+//       'CARD': { gatewayId: 1, name: 'Razorpay' },
+//       'UPI': { gatewayId: 2, name: 'Cashfree' },
+//       'WALLET': { gatewayId: 1, name: 'Razorpay' },
+//       'NETBANKING': null
+//     }
+//   }
+// };
+
+
+
+
+
+
+
+
+
+
+// config/routing.js
+module.exports = {
+  merchants: {
+    '1': {
+      id: 1,
+      name: 'Merchant1',
+      routingStrategy: 'PRIORITY',
+      gateways: [
+        { id: 1, name: 'Razorpay', priority: 1, maxRetries: 3 },
+        { id: 2, name: 'Cashfree', priority: 2, maxRetries: 3 },
+        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 }
+      ]
+    },
+    '2': {
+      id: 2,
+      name: 'Merchant2',
+      routingStrategy: 'HYBRID',
+      gateways: [
+        { id: 3, name: 'Adyen', priority: 1, maxRetries: 3 },
+        { id: 1, name: 'Razorpay', priority: 2, maxRetries: 3 },
+        { id: 2, name: 'Cashfree', priority: 3, maxRetries: 3 }
+      ]
+    },
+    '3': {
+      id: 3,
+      name: 'Merchant3',
+      routingStrategy: 'HYBRID',
+      gateways: [
+        { id: 2, name: 'Cashfree', priority: 1, maxRetries: 3 },
+        { id: 1, name: 'Razorpay', priority: 2, maxRetries: 3 },
+        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 }
+      ]
+    },
+    '4': {
+      id: 4,
+      name: 'Merchant4',
+      routingStrategy: 'PRIORITY',
+      gateways: [
+        { id: 2, name: 'Cashfree', priority: 1, maxRetries: 3 },
+        { id: 3, name: 'Adyen', priority: 2, maxRetries: 3 },
+        { id: 1, name: 'Razorpay', priority: 3, maxRetries: 3 }
+      ]
+    },
+    '5': {
+      id: 5,
+      name: 'Merchant5',
+      routingStrategy: 'PRIORITY',
+      gateways: [
+        { id: 1, name: 'Razorpay', priority: 1, maxRetries: 3 },
+        { id: 2, name: 'Cashfree', priority: 2, maxRetries: 3 },
+        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 }
+      ]
+    },
+    '6': {
+      id: 6,
+      name: 'Merchant6',
+      routingStrategy: 'FAILOVER',
+      gateways: [
+        { id: 3, name: 'Adyen', priority: 1, maxRetries: 3 },
+        { id: 1, name: 'Razorpay', priority: 2, maxRetries: 3 },
+        { id: 2, name: 'Cashfree', priority: 3, maxRetries: 3 }
+      ]
+    },
+    '7': {
+      id: 7,
+      name: 'Merchant7',
+      routingStrategy: 'PRIORITY',
+      gateways: [
+        { id: 2, name: 'Cashfree', priority: 1, maxRetries: 3 },
+        { id: 3, name: 'Adyen', priority: 2, maxRetries: 3 },
+        { id: 1, name: 'Razorpay', priority: 3, maxRetries: 3 }
+      ]
+    },
+    '8': {
+      id: 8,
+      name: 'Merchant8',
+      routingStrategy: 'PRIORITY',
+      gateways: [
+        { id: 2, name: 'Cashfree', priority: 1, maxRetries: 3 },
+        { id: 1, name: 'Razorpay', priority: 2, maxRetries: 3 },
+        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 }
+      ]
+    },
+    '9': {
+      id: 9,
+      name: 'Merchant9',
+      routingStrategy: 'PRIORITY',
+      gateways: [
+        { id: 2, name: 'Cashfree', priority: 1, maxRetries: 3 },
+        { id: 1, name: 'Razorpay', priority: 2, maxRetries: 3 },
+        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 }
+      ]
+    },
+    '10': {
+      id: 10,
+      name: 'Merchant10',
+      routingStrategy: 'PRIORITY',
+      gateways: [
+        { id: 2, name: 'Cashfree', priority: 1, maxRetries: 3 },
+        { id: 1, name: 'Razorpay', priority: 2, maxRetries: 3 },
+        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 }
+      ]
+    }
+  },
+  // Helper function to get merchant by ID
+  getMerchant: function(id) {
+    return this.merchants[id];
+  },
+  // Helper function to get gateways for merchant
+  getGateways: function(merchantId) {
+    const merchant = this.merchants[merchantId];
+    return merchant ? merchant.gateways : [];
+  },
+  // Helper function to get routing strategy
+  getStrategy: function(merchantId) {
+    const merchant = this.merchants[merchantId];
+    return merchant ? merchant.routingStrategy : null;
+  }
+};
+
+==================== C:\Users\DELL\Desktop\Automation\src\config\users.js ====================
+// config/users.js
+module.exports = {
+  users: {
+    amanpandey: {
+      id: 2,
+      name: "Aman Pandey",
+      email: "amanpandey@gmail.com",
+      role: "MERCHANT",
+      merchantId: 1,
+    },
+    gopalkrishna: {
+      id: 5,
+      name: "Gopal Kirshna",
+      email: "gopalkrishna@gmail.com",
+      role: "MERCHANT",
+      merchantId: 1,
+    },
+    soniakalonia: {
+      id: 3,
+      name: "Sonia Kalonia",
+      email: "soniakalonia@gmail.com",
+      role: "MERCHANT",
+      merchantId: 2,
+    },
+    piyushkirola: {
+      id: 4,
+      name: "Piyush Kirola",
+      email: "piyushkirola@gmail.com",
+      role: "MERCHANT",
+      merchantId: 3,
+    },
+    rajeshkhanna: {
+      id: 7,
+      name: "Rajesh Khanna",
+      email: "rajeshkhanna@gmail.com",
+      role: "MERCHANT",
+      merchantId: 4,
+    },
+    kavyaiyer: {
+      id: 15,
+      name: "Kavya Iyer",
+      email: "kavyaiyer@gmail.com",
+      role: "MERCHANT",
+      merchantId: 4,
+    },
+    raghunathmishra: {
+      id: 8,
+      name: "Raghunath Mishra",
+      email: "raghunathmishra@gmail.com",
+      role: "MERCHANT",
+      merchantId: 5,
+    },
+    amishabaghel: {
+      id: 9,
+      name: "Amisha Baghel",
+      email: "amishabaghel@gmail.com",
+      role: "MERCHANT",
+      merchantId: 6,
+    },
+    snehapatel: {
+      id: 12,
+      name: "Sneha Patel",
+      email: "snehapatel@gmail.com",
+      role: "MERCHANT",
+      merchantId: 7,
+    },
+    arjunmehta: {
+      id: 14,
+      name: "Arjun Mehta",
+      email: "arjunmehta@gmail.com",
+      role: "MERCHANT",
+      merchantId: 8,
+    },
+    ananyanair: {
+      id: 13,
+      name: "Ananya Nair",
+      email: "ananyanair@gmail.com",
+      role: "MERCHANT",
+      merchantId: 9,
+    },
+    deepakgupta: {
+      id: 11,
+      name: "Deepak Gupta",
+      email: "deepakgupta@gmail.com",
+      role: "MERCHANT",
+      merchantId: 10,
+    },
+  },
+  // Helper function to get user by merchant ID
+  getUsersByMerchant: function (merchantId) {
+    const result = [];
+    for (const [key, user] of Object.entries(this.users)) {
+      if (user.merchantId === merchantId) {
+        result.push({ key, ...user });
+      }
+    }
+    return result;
+  },
+  // Helper function to get all merchants with users
+  getMerchantsWithUsers: function () {
+    const merchants = {};
+    for (const [key, user] of Object.entries(this.users)) {
+      if (!merchants[user.merchantId]) {
+        merchants[user.merchantId] = [];
+      }
+      merchants[user.merchantId].push({ key, ...user });
+    }
+    return merchants;
+  },
+};
+
+==================== C:\Users\DELL\Desktop\Automation\src\tests\01-priority-routing.js ====================
+const { loginUser } = require("../api/auth");
+const { createPayIn } = require("../api/payin");
+const {
+  randomPaymentMode,
+  randomAmount,
+  randomCustomer,
+} = require("../utils/random");
+const {
+  logSection,
+  logSuccess,
+  logError,
+  logInfo,
+  logWarning,
+} = require("../utils/logger");
+const routingConfig = require("../config/routing");
+const { isRoutingCorrect } = require("../validators/response");
+const { triggerWebhookForPayIn } = require("../utils/webhook-trigger");
+
+/**
+ * Test Priority Routing
+ * Verifies that gateway selection follows priority order
+ */
+async function testPriorityRouting() {
+  logSection("TEST 1: PRIORITY ROUTING");
+
+  const users = [
+    { email: "amanpandey@gmail.com", password: "12345678", merchantId: 1 },
+    { email: "soniakalonia@gmail.com", password: "12345678", merchantId: 2 },
+    { email: "piyushkirola@gmail.com", password: "12345678", merchantId: 3 },
+  ];
+
+  const results = [];
+  const allPaymentModes = ["UPI", "CARD", "WALLET", "NETBANKING"];
+
+  for (const user of users) {
+    logInfo(`\nTesting Merchant ${user.merchantId} (${user.email})`);
+
+    try {
+      // Login
+      const loginData = await loginUser(user.email, user.password);
+      const { accessToken, clientSecret } = loginData;
+
+      const merchantResults = [];
+
+      // Test each payment mode
+      for (const paymentMode of allPaymentModes) {
+        const expected =
+          routingConfig[user.merchantId]?.expectedGateway?.[paymentMode];
+
+        if (!expected) {
+          logWarning(
+            `No expected gateway for ${paymentMode} on Merchant ${user.merchantId}`,
+          );
+          merchantResults.push({
+            paymentMode,
+            expected: null,
+            actual: null,
+            passed: true,
+            reason: "No routing expected",
+          });
+          continue;
+        }
+
+        try {
+          // Create pay-in with specific payment mode
+          const amount = randomAmount(100, 5000);
+          const customer = randomCustomer();
+          const merchantReference = `ORD-PRIORITY-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+          const result = await createPayIn(accessToken, clientSecret, {
+            paymentMode,
+            amount,
+            customer,
+            merchantReference,
+          });
+          const webhookResult = await triggerWebhookForPayIn(result, 'SUCCESS');
+
+          const isCorrect = isRoutingCorrect(
+            result.response,
+            expected.gatewayId,
+          );
+
+          merchantResults.push({
+            paymentMode,
+            expected: expected.name,
+            actual: isCorrect ? expected.name : "Unknown",
+            passed: isCorrect,
+            transactionId: result.response.id,
+            merchantReference: result.request.merchantReference,
+          });
+
+          if (isCorrect) {
+            logSuccess(`${paymentMode} → ${expected.name} (PASS)`);
+          } else {
+            logError(`${paymentMode} → Expected: ${expected.name} (FAIL)`);
+          }
+        } catch (error) {
+          logError(`${paymentMode} → Error: ${error.message}`);
+          merchantResults.push({
+            paymentMode,
+            expected: expected.name,
+            actual: "ERROR",
+            passed: false,
+            error: error.message,
+          });
+        }
+      }
+
+      results.push({
+        merchantId: user.merchantId,
+        email: user.email,
+        results: merchantResults,
+      });
+    } catch (error) {
+      logError(`Failed to test merchant ${user.merchantId}: ${error.message}`);
+    }
+  }
+
+  // Summary
+  logSection("PRIORITY ROUTING SUMMARY");
+  let total = 0,
+    passed = 0;
+
+  for (const merchant of results) {
+    console.log(`\nMerchant ${merchant.merchantId} (${merchant.email}):`);
+    for (const r of merchant.results) {
+      const status = r.passed ? "PASS" : "FAIL";
+      console.log(`  ${r.paymentMode} → ${r.expected || "N/A"} → ${status}`);
+      total++;
+      if (r.passed) passed++;
+    }
+  }
+
+  console.log(
+    `\nTotal: ${total} | Passed: ${passed} | Failed: ${total - passed}`,
+  );
+  console.log(`Pass Rate: ${((passed / total) * 100).toFixed(1)}%`);
+
+  return { results, total, passed, failed: total - passed };
+}
+
+module.exports = { testPriorityRouting };
+
+==================== C:\Users\DELL\Desktop\Automation\src\tests\02-failover-routing.js ====================
+const { loginUser } = require("../api/auth");
+const { createPayIn } = require("../api/payin");
+const { randomAmount, randomCustomer } = require("../utils/random");
+const {
+  logSection,
+  logSuccess,
+  logError,
+  logInfo,
+} = require("../utils/logger");
+const { triggerWebhookForPayIn } = require("../utils/webhook-trigger");
+
+/**
+ * Test Failover Routing
+ * Simulates gateway failures and verifies fallback
+ */
+async function testFailoverRouting() {
+  logSection("TEST 2: FAILOVER ROUTING");
+
+  // This test simulates scenarios where first gateway fails
+  // Since we can't actually make gateways fail, we test the logic
+  // by checking if multiple payment modes use different gateways
+
+  const user = {
+    email: "amanpandey@gmail.com",
+    password: "12345678",
+    merchantId: 1,
+  };
+
+  logInfo(`Testing failover for Merchant ${user.merchantId}`);
+
+  try {
+    const loginData = await loginUser(user.email, user.password);
+    const { accessToken, clientSecret } = loginData;
+
+    const results = [];
+    const transactions = 5;
+
+    // Create multiple transactions with CARD (should use Razorpay as priority)
+    logInfo(`Creating ${transactions} CARD transactions...`);
+
+    for (let i = 0; i < transactions; i++) {
+      const amount = randomAmount(100, 5000);
+      const customer = randomCustomer();
+      const merchantReference = `ORD-FAILOVER-${Date.now()}-${i}`;
+
+      try {
+        const result = await createPayIn(accessToken, clientSecret, {
+          paymentMode: "CARD",
+          amount,
+          customer,
+          merchantReference,
+        });
+        // AUTO-TRIGGER WEBHOOK
+        await triggerWebhookForPayIn(result, 'SUCCESS');
+
+        // Check which gateway was used
+        let gatewayUsed = "Unknown";
+        if (result.response.intent) {
+          try {
+            const intent = JSON.parse(result.response.intent);
+            if (intent.key && intent.key.startsWith("rzp_test")) {
+              gatewayUsed = "Razorpay";
+            }
+          } catch (e) {}
+        }
+
+        results.push({
+          transaction: i + 1,
+          merchantReference: result.request.merchantReference,
+          gatewayUsed,
+          status: result.response.status,
+          success: true,
+        });
+
+        logInfo(
+          `  Txn ${i + 1}: ${gatewayUsed} | Status: ${result.response.status}`,
+        );
+      } catch (error) {
+        logError(`  Txn ${i + 1}: Failed - ${error.message}`);
+        results.push({
+          transaction: i + 1,
+          success: false,
+          error: error.message,
+        });
+      }
+    }
+
+    // Check consistency
+    const gateways = results.filter((r) => r.success).map((r) => r.gatewayUsed);
+    const uniqueGateways = [...new Set(gateways)];
+
+    logSection("FAILOVER TEST RESULTS");
+    console.log(`Total Transactions: ${transactions}`);
+    console.log(`Successful: ${results.filter((r) => r.success).length}`);
+    console.log(`Gateways Used: ${uniqueGateways.join(", ")}`);
+
+    if (uniqueGateways.length > 1) {
+      logInfo("⚠️ Multiple gateways used - Failover likely occurred");
+    } else if (uniqueGateways.length === 1) {
+      logInfo(`✅ All transactions used ${uniqueGateways[0]} - No failover`);
+    }
+
+    return { results, uniqueGateways };
+  } catch (error) {
+    logError(`Failover test failed: ${error.message}`);
+    throw error;
+  }
+}
+
+module.exports = { testFailoverRouting };
+
+==================== C:\Users\DELL\Desktop\Automation\src\tests\03-hybrid-routing.js ====================
+const { loginUser } = require("../api/auth");
+const { createPayIn } = require("../api/payin");
+const { randomAmount, randomCustomer } = require("../utils/random");
+const {
+  logSection,
+  logSuccess,
+  logError,
+  logInfo,
+} = require("../utils/logger");
+const { triggerWebhookForPayIn } = require("../utils/webhook-trigger");
+
+/**
+ * Test Hybrid Routing
+ * Verifies when multiple gateways support same payment mode,
+ * the highest priority is selected
+ */
+async function testHybridRouting() {
+  logSection("TEST 3: HYBRID ROUTING");
+
+  const user = {
+    email: "soniakalonia@gmail.com",
+    password: "12345678",
+    merchantId: 2,
+  };
+
+  logInfo(`Testing hybrid routing for Merchant ${user.merchantId}`);
+
+  try {
+    const loginData = await loginUser(user.email, user.password);
+    const { accessToken, clientSecret } = loginData;
+
+    const results = [];
+    const testModes = ["UPI", "CARD", "WALLET"];
+    const expectedGatewayMap = {
+      UPI: "Cashfree", // Cashfree priority 2, Adyen priority 3
+      CARD: "Razorpay", // Razorpay priority 1
+      WALLET: "Adyen", // Adyen priority 3 (only one supporting WALLET after Razorpay removed)
+    };
+
+    for (const paymentMode of testModes) {
+      logInfo(`\nTesting ${paymentMode}...`);
+
+      // Run 3 transactions for each mode
+      const modeResults = [];
+      for (let i = 0; i < 3; i++) {
+        const amount = randomAmount(100, 5000);
+        const customer = randomCustomer();
+        const merchantReference = `ORD-HYBRID-${Date.now()}-${i}`;
+
+        try {
+          const result = await createPayIn(accessToken, clientSecret, {
+            paymentMode,
+            amount,
+            customer,
+            merchantReference,
+          });
+          // ✅ AUTO-TRIGGER WEBHOOK
+          await triggerWebhookForPayIn(result, 'SUCCESS');
+
+          let actualGateway = "Unknown";
+          if (result.response.intent) {
+            try {
+              const intent = JSON.parse(result.response.intent);
+              if (intent.key && intent.key.startsWith("rzp_test")) {
+                actualGateway = "Razorpay";
+              } else if (intent.paymentSessionId) {
+                actualGateway = "Cashfree";
+              } else if (intent.pspReference) {
+                actualGateway = "Adyen";
+              }
+            } catch (e) {}
+          }
+
+          const isCorrect = actualGateway === expectedGatewayMap[paymentMode];
+          modeResults.push({
+            success: true,
+            actual: actualGateway,
+            expected: expectedGatewayMap[paymentMode],
+            passed: isCorrect,
+            merchantReference,
+          });
+
+          if (isCorrect) {
+            logSuccess(`  ✅ ${paymentMode} → ${actualGateway} (PASS)`);
+          } else {
+            logError(
+              `  ❌ ${paymentMode} → Expected: ${expectedGatewayMap[paymentMode]}, Got: ${actualGateway} (FAIL)`,
+            );
+          }
+        } catch (error) {
+          logError(`  ❌ ${paymentMode} → Error: ${error.message}`);
+          modeResults.push({
+            success: false,
+            expected: expectedGatewayMap[paymentMode],
+            passed: false,
+            error: error.message,
+          });
+        }
+      }
+
+      results.push({
+        paymentMode,
+        expected: expectedGatewayMap[paymentMode],
+        results: modeResults,
+      });
+    }
+
+    // Summary
+    logSection("HYBRID ROUTING SUMMARY");
+    let total = 0,
+      passed = 0;
+    for (const mode of results) {
+      console.log(`\n${mode.paymentMode} (Expected: ${mode.expected}):`);
+      for (const r of mode.results) {
+        const status = r.passed ? "✅ PASS" : "❌ FAIL";
+        console.log(`  ${r.actual || "ERROR"} → ${status}`);
+        total++;
+        if (r.passed) passed++;
+      }
+    }
+
+    console.log(
+      `\n📊 Total: ${total} | Passed: ${passed} | Failed: ${total - passed}`,
+    );
+
+    return { results, total, passed };
+  } catch (error) {
+    logError(`Hybrid routing test failed: ${error.message}`);
+    throw error;
+  }
+}
+
+module.exports = { testHybridRouting };
+
+==================== C:\Users\DELL\Desktop\Automation\src\tests\04-default-routing.js ====================
+const { loginUser } = require("../api/auth");
+const { createPayIn } = require("../api/payin");
+const { randomAmount, randomCustomer } = require("../utils/random");
+const {
+  logSection,
+  logSuccess,
+  logError,
+  logInfo,
+} = require("../utils/logger");
+const { triggerWebhookForPayIn } = require("../utils/webhook-trigger");
+
+/**
+ * Test Default Routing
+ * Verifies behavior when no specific gateway is assigned
+ */
+async function testDefaultRouting() {
+  logSection("TEST 4: DEFAULT ROUTING");
+
+  // Merchant 3 has no priorities configured
+  const user = {
+    email: "piyushkirola@gmail.com",
+    password: "12345678",
+    merchantId: 3,
+  };
+
+  logInfo(`Testing default routing for Merchant ${user.merchantId}`);
+
+  try {
+    const loginData = await loginUser(user.email, user.password);
+    const { accessToken, clientSecret } = loginData;
+
+    const results = [];
+    const testModes = ["UPI", "CARD", "WALLET"];
+
+    for (const paymentMode of testModes) {
+      logInfo(`\nTesting ${paymentMode} with no priority config...`);
+
+      const amount = randomAmount(100, 5000);
+      const customer = randomCustomer();
+      const merchantReference = `ORD-DEFAULT-${Date.now()}`;
+
+      try {
+        const result = await createPayIn(accessToken, clientSecret, {
+          paymentMode,
+          amount,
+          customer,
+          merchantReference,
+        });
+        // AUTO-TRIGGER WEBHOOK
+        await triggerWebhookForPayIn(result, 'SUCCESS');
+
+        let actualGateway = "Unknown";
+        if (result.response.intent) {
+          try {
+            const intent = JSON.parse(result.response.intent);
+            if (intent.key && intent.key.startsWith("rzp_test")) {
+              actualGateway = "Razorpay";
+            } else if (intent.key && intent.key.includes("cashfree")) {
+              actualGateway = "Cashfree";
+            } else if (intent.key && intent.key.includes("adyen")) {
+              actualGateway = "Adyen";
+            }
+          } catch (e) {}
+        }
+
+        results.push({
+          paymentMode,
+          actualGateway,
+          status: result.response.status,
+          success: true,
+          merchantReference,
+        });
+
+        logInfo(
+          `  ${paymentMode} → ${actualGateway} | Status: ${result.response.status}`,
+        );
+      } catch (error) {
+        logError(`  ${paymentMode} → Failed: ${error.message}`);
+        results.push({
+          paymentMode,
+          success: false,
+          error: error.message,
+        });
+      }
+    }
+
+    logSection("DEFAULT ROUTING RESULTS");
+    console.log(`Merchant ${user.merchantId}: No priorities configured`);
+    console.log(
+      `Result: ${results.filter((r) => r.success).length}/${results.length} successful`,
+    );
+    console.log(
+      `Gateways Used: ${results
+        .filter((r) => r.success)
+        .map((r) => r.actualGateway)
+        .join(", ")}`,
+    );
+
+    return { results };
+  } catch (error) {
+    logError(`Default routing test failed: ${error.message}`);
+    throw error;
+  }
+}
+
+module.exports = { testDefaultRouting };
+
+==================== C:\Users\DELL\Desktop\Automation\src\tests\05-retry-logic.js ====================
+const { loginUser } = require('../api/auth');
+const { createPayIn } = require('../api/payin');
+const { randomAmount, randomCustomer, randomPaymentMode } = require('../utils/random');
+const { logSection, logSuccess, logError, logInfo } = require('../utils/logger');
+const { triggerWebhookForPayIn } = require('../utils/webhook-trigger');
+
+/**
+ * Test Retry Logic
+ * Verifies retry mechanism works correctly
+ */
+async function testRetryLogic() {
+  logSection('TEST 5: RETRY LOGIC');
+  
+  const user = { email: 'amanpandey@gmail.com', password: '12345678', merchantId: 1 };
+  
+  logInfo(`Testing retry logic for Merchant ${user.merchantId}`);
+  
+  try {
+    const loginData = await loginUser(user.email, user.password);
+    const { accessToken, clientSecret } = loginData;
+    
+    const results = [];
+    
+    // Create multiple transactions and check retry behavior
+    for (let i = 0; i < 5; i++) {
+      const amount = randomAmount(100, 5000);
+      const customer = randomCustomer();
+      const paymentMode = randomPaymentMode();
+      const merchantReference = `ORD-RETRY-${Date.now()}-${i}`;
+      
+      try {
+        const result = await createPayIn(accessToken, clientSecret, {
+          paymentMode,
+          amount,
+          customer,
+          merchantReference
+        });
+        // ✅ AUTO-TRIGGER WEBHOOK
+await triggerWebhookForPayIn(result, 'SUCCESS');
+        
+        // Check if retryCount exists in response
+        const retryCount = result.response.retryCount || 0;
+        const maxRetries = result.response.maxRetries || 3;
+        
+        results.push({
+          transaction: i + 1,
+          merchantReference,
+          status: result.response.status,
+          retryCount,
+          maxRetries,
+          success: true
+        });
+        
+        logInfo(`  Txn ${i+1}: Status: ${result.response.status}, Retries: ${retryCount}/${maxRetries}`);
+        
+      } catch (error) {
+        logError(`  Txn ${i+1}: Failed - ${error.message}`);
+        results.push({
+          transaction: i + 1,
+          success: false,
+          error: error.message
+        });
+      }
+    }
+    
+    logSection('RETRY LOGIC RESULTS');
+    const successful = results.filter(r => r.success);
+    console.log(`Total Transactions: ${results.length}`);
+    console.log(`Successful: ${successful.length}`);
+    console.log(`Failed: ${results.length - successful.length}`);
+    
+    if (successful.length > 0) {
+      const avgRetries = successful.reduce((sum, r) => sum + r.retryCount, 0) / successful.length;
+      console.log(`Average Retry Count: ${avgRetries.toFixed(1)}`);
+      console.log(`Max Retries Limit: ${successful[0].maxRetries}`);
+    }
+    
+    return { results };
+    
+  } catch (error) {
+    logError(`Retry logic test failed: ${error.message}`);
+    throw error;
+  }
+}
+
+module.exports = { testRetryLogic };
+
+==================== C:\Users\DELL\Desktop\Automation\src\tests\06-mdr-calculation.js ====================
+const { loginUser } = require("../api/auth");
+const { createPayIn } = require("../api/payin");
+const { randomCustomer } = require("../utils/random");
+const {
+  logSection,
+  logSuccess,
+  logError,
+  logInfo,
+} = require("../utils/logger");
+const { triggerWebhookForPayIn } = require("../utils/webhook-trigger");
+
+/**
+ * Test MDR/Fee Calculation
+ * Verifies fees are calculated correctly based on gateway pricing
+ */
+async function testMDRCalculation() {
+  logSection("TEST 6: MDR/FEE CALCULATION");
+
+  const user = {
+    email: "amanpandey@gmail.com",
+    password: "12345678",
+    merchantId: 1,
+  };
+
+  logInfo(`Testing MDR calculation for Merchant ${user.merchantId}`);
+
+  const testCases = [
+    {
+      amount: 1000,
+      paymentMode: "CARD",
+      expectedFee: 15,
+      expectedCredit: 982.3,
+    },
+    { amount: 500, paymentMode: "UPI", expectedFee: 9, expectedCredit: 489.38 },
+    {
+      amount: 2000,
+      paymentMode: "CARD",
+      expectedFee: 30,
+      expectedCredit: 1964.6,
+    },
+    {
+      amount: 100,
+      paymentMode: "UPI",
+      expectedFee: 1.8,
+      expectedCredit: 97.88,
+    },
+  ];
+
+  try {
+    const loginData = await loginUser(user.email, user.password);
+    const { accessToken, clientSecret } = loginData;
+
+    const results = [];
+
+    for (const testCase of testCases) {
+      const customer = randomCustomer();
+      const merchantReference = `ORD-MDR-${Date.now()}`;
+
+      try {
+        const result = await createPayIn(accessToken, clientSecret, {
+          amount: testCase.amount,
+          paymentMode: testCase.paymentMode,
+          customer,
+          merchantReference,
+        });
+        // ✅ AUTO-TRIGGER WEBHOOK
+        await triggerWebhookForPayIn(result, 'SUCCESS');
+
+        const actualFee = parseFloat(result.response.feeAmount) || 0;
+        const amountToCredit = parseFloat(result.response.amountToCredit) || 0;
+        const expectedCredit = testCase.expectedCredit;
+
+        const feeMatches = Math.abs(actualFee - testCase.expectedFee) < 0.01;
+        const creditMatches = Math.abs(amountToCredit - expectedCredit) < 0.01;
+
+        results.push({
+          amount: testCase.amount,
+          paymentMode: testCase.paymentMode,
+          expectedFee: testCase.expectedFee,
+          actualFee,
+          expectedCredit,
+          amountToCredit,
+          feeMatches,
+          creditMatches,
+          passed: feeMatches && creditMatches,
+          merchantReference,
+        });
+
+        if (feeMatches && creditMatches) {
+          logSuccess(
+            `  ✅ ${testCase.paymentMode} ₹${testCase.amount} → Fee: ₹${actualFee}, Credit: ₹${amountToCredit} (PASS)`,
+          );
+        } else {
+          logError(
+            `  ❌ ${testCase.paymentMode} ₹${testCase.amount} → Expected Fee: ₹${testCase.expectedFee}, Got: ₹${actualFee} | Expected Credit: ₹${expectedCredit}, Got: ₹${amountToCredit} (FAIL)`,
+          );
+        }
+      } catch (error) {
+        logError(
+          `  ❌ ${testCase.paymentMode} ₹${testCase.amount} → Error: ${error.message}`,
+        );
+        results.push({
+          ...testCase,
+          passed: false,
+          error: error.message,
+        });
+      }
+    }
+
+    logSection("MDR CALCULATION RESULTS");
+    const passed = results.filter((r) => r.passed).length;
+    console.log(`Total Tests: ${results.length}`);
+    console.log(`Passed: ${passed}`);
+    console.log(`Failed: ${results.length - passed}`);
+
+    return { results, passed, total: results.length };
+  } catch (error) {
+    logError(`MDR calculation test failed: ${error.message}`);
+    throw error;
+  }
+}
+
+module.exports = { testMDRCalculation };
+
+==================== C:\Users\DELL\Desktop\Automation\src\tests\07-webhook-processing.js ====================
+const { loginUser } = require('../api/auth');
+const { createPayIn } = require('../api/payin');
+const { 
+  simulateCashfreeWebhook, 
+  simulateRazorpayWebhook, 
+  simulateAdyenWebhook,
+  getWebhookPayloads 
+} = require('../api/webhook');
+const { randomAmount, randomCustomer, randomPaymentMode } = require('../utils/random');
+const { logSection, logSuccess, logError, logInfo } = require('../utils/logger');
+
+/**
+ * Test Webhook Processing
+ * Verifies webhooks are processed correctly for each gateway
+ */
+async function testWebhookProcessing() {
+  logSection('TEST 7: WEBHOOK PROCESSING');
+  
+  const user = { email: 'amanpandey@gmail.com', password: '12345678', merchantId: 1 };
+  
+  logInfo(`Testing webhook processing for Merchant ${user.merchantId}`);
+  
+  try {
+    const loginData = await loginUser(user.email, user.password);
+    const { accessToken, clientSecret } = loginData;
+    
+    const results = [];
+    
+    // Create a real pay-in request
+    const amount = randomAmount(100, 5000);
+    const customer = randomCustomer();
+    const paymentMode = randomPaymentMode();
+    const merchantReference = `ORD-WEBHOOK-${Date.now()}`;
+    
+    logInfo(`Creating pay-in: ${merchantReference}`);
+    
+    const payInResult = await createPayIn(accessToken, clientSecret, {
+      amount,
+      paymentMode,
+      customer,
+      merchantReference
+    });
+    
+    const transactionId = payInResult.response.id;
+    logInfo(`Transaction ID: ${transactionId}`);
+    
+    // Get webhook payloads
+    const webhookPayloads = getWebhookPayloads(merchantReference, amount, paymentMode, customer);
+    
+    // Test each webhook
+    const webhookTests = [
+      { name: 'Cashfree', payload: webhookPayloads.cashfree, simulate: simulateCashfreeWebhook },
+      { name: 'Razorpay', payload: webhookPayloads.razorpay, simulate: simulateRazorpayWebhook },
+      { name: 'Adyen', payload: webhookPayloads.adyen, simulate: simulateAdyenWebhook }
+    ];
+    
+    for (const test of webhookTests) {
+      logInfo(`\n📨 Testing ${test.name} webhook...`);
+      
+      try {
+        const result = await test.simulate(test.payload);
+        
+        // Check response
+        const isSuccess = result && (result.success || result.processed || !result.error);
+        
+        results.push({
+          gateway: test.name,
+          merchantReference,
+          transactionId,
+          processed: isSuccess,
+          response: result
+        });
+        
+        if (isSuccess) {
+          logSuccess(`  ✅ ${test.name} webhook processed successfully`);
+        } else {
+          logError(`  ❌ ${test.name} webhook failed`);
+        }
+        
+      } catch (error) {
+        logError(`  ❌ ${test.name} webhook error: ${error.message}`);
+        results.push({
+          gateway: test.name,
+          merchantReference,
+          transactionId,
+          processed: false,
+          error: error.message
+        });
+      }
+    }
+    
+    logSection('WEBHOOK PROCESSING RESULTS');
+    const passed = results.filter(r => r.processed).length;
+    console.log(`Total Webhooks: ${results.length}`);
+    console.log(`Processed Successfully: ${passed}`);
+    console.log(`Failed: ${results.length - passed}`);
+    
+    return { results, passed, total: results.length };
+    
+  } catch (error) {
+    logError(`Webhook processing test failed: ${error.message}`);
+    throw error;
+  }
+}
+
+module.exports = { testWebhookProcessing };
+
+==================== C:\Users\DELL\Desktop\Automation\src\tests\08-end-to-end-flow.js ====================
+const { loginUser } = require('../api/auth');
+const { createPayIn } = require('../api/payin');
+const { simulateRazorpayWebhook, getWebhookPayloads } = require('../api/webhook');
+const { randomAmount, randomCustomer } = require('../utils/random');
+const { logSection, logSuccess, logError, logInfo } = require('../utils/logger');
+
+/**
+ * Test End-to-End Flow for ALL Merchants
+ */
+async function testEndToEndFlow() {
+  logSection('TEST 8: END-TO-END FLOW (ALL MERCHANTS)');
+  
+  const users = [
+    { email: 'amanpandey@gmail.com', password: '12345678', merchantId: 1 },
+    { email: 'soniakalonia@gmail.com', password: '12345678', merchantId: 2 },
+    { email: 'piyushkirola@gmail.com', password: '12345678', merchantId: 3 }
+  ];
+
+  const results = [];
+
+  for (const user of users) {
+    logInfo(`\nTesting Merchant ${user.merchantId} (${user.email})`);
+    
+    try {
+      // Step 1: Login
+      logInfo('  Step 1: Logging in...');
+      const loginData = await loginUser(user.email, user.password);
+      const { accessToken, clientSecret } = loginData;
+      logSuccess(`Logged in as ${user.email}`);
+      
+      // Step 2: Create Pay-In
+      logInfo('  Step 2: Creating pay-in...');
+      const amount = randomAmount(100, 5000);
+      const customer = randomCustomer();
+      const paymentMode = 'CARD';
+      const merchantReference = `ORD-E2E-${user.merchantId}-${Date.now()}`;
+      
+      const payInResult = await createPayIn(accessToken, clientSecret, {
+        amount,
+        paymentMode,
+        customer,
+        merchantReference
+      });
+      
+      const transactionId = payInResult.response.id;
+      const status = payInResult.response.status;
+      logSuccess(`Pay-In created: ID ${transactionId}, Status: ${status}`);
+      
+      // Step 3: Simulate Webhook (NO RE-LOGIN NEEDED)
+      logInfo('  Step 3: Simulating webhook...');
+      const webhookPayloads = getWebhookPayloads(merchantReference, amount, paymentMode, customer);
+      const webhookResult = await simulateRazorpayWebhook(webhookPayloads.razorpay);
+      
+      const webhookSuccess = webhookResult && (webhookResult.success || webhookResult.processed);
+      logSuccess(`Webhook ${webhookSuccess ? 'processed' : 'failed'}`);
+      
+      results.push({
+        merchantId: user.merchantId,
+        email: user.email,
+        transactionId,
+        merchantReference,
+        amount,
+        paymentMode,
+        initialStatus: status,
+        webhookProcessed: webhookSuccess,
+        success: status === 'PENDING' && webhookSuccess
+      });
+      
+    } catch (error) {
+      logError(`Failed for ${user.email}: ${error.message}`);
+      results.push({
+        merchantId: user.merchantId,
+        email: user.email,
+        success: false,
+        error: error.message
+      });
+    }
+  }
+
+  // Summary
+  logSection('END-TO-END FLOW RESULTS (ALL MERCHANTS)');
+  const passed = results.filter(r => r.success).length;
+  const total = results.length;
+  
+  console.log(`\nTotal Merchants Tested: ${total}`);
+  console.log(`Success: ${passed}`);
+  console.log(`Failed: ${total - passed}`);
+  console.log(`Pass Rate: ${((passed/total)*100).toFixed(1)}%`);
+  
+  return results;
+}
+
+module.exports = { testEndToEndFlow };
+
+==================== C:\Users\DELL\Desktop\Automation\src\tests\09-mixed-status.js ====================
+const { loginUser } = require("../api/auth");
+const { createPayIn } = require("../api/payin");
+const { randomAmount, randomCustomer } = require("../utils/random");
+const {
+  logSection,
+  logSuccess,
+  logError,
+  logInfo,
+  logWarning,
+} = require("../utils/logger");
+const { triggerWebhookForPayIn } = require("../utils/webhook-trigger");
+
+/**
+ * Test PENDING and FAILED Transaction Statuses
+ */
+async function testMixedStatus() {
+  logSection("TEST 9: PENDING & FAILED TRANSACTION STATUSES");
+
+  const user = {
+    email: "amanpandey@gmail.com",
+    password: "12345678",
+    merchantId: 1,
+  };
+
+  try {
+    const loginData = await loginUser(user.email, user.password);
+    const { accessToken, clientSecret } = loginData;
+
+    const results = [];
+
+    // Test cases for PENDING and FAILED statuses only
+    const testCases = [
+      {
+        status: "FAILED",
+        description: "Failed Payment",
+        paymentMode: "UPI",
+      },
+      {
+        status: "PENDING",
+        description: "Pending Payment",
+        paymentMode: "WALLET",
+      },
+    ];
+
+    for (const testCase of testCases) {
+      logInfo(
+        `\nTesting ${testCase.status}: ${testCase.description} (${testCase.paymentMode})`,
+      );
+
+      const amount = randomAmount(100, 5000);
+      const customer = randomCustomer();
+      const merchantReference = `ORD-${testCase.status}-${Date.now()}`;
+
+      try {
+        // Create pay-in with specific payment mode that has gateway
+        const payInResult = await createPayIn(accessToken, clientSecret, {
+          amount,
+          paymentMode: testCase.paymentMode,
+          customer,
+          merchantReference,
+        });
+
+        logInfo(`  Transaction ID: ${payInResult.response.id}`);
+        logInfo(`  Status: ${payInResult.response.status}`);
+
+        // Trigger webhook with appropriate status
+        const webhookResult = await triggerWebhookForPayIn(
+          payInResult,
+          testCase.status,
+        );
+
+        if (testCase.status === "PENDING") {
+          // Pending should NOT trigger webhook
+          if (webhookResult && !webhookResult.webhookTriggered) {
+            logSuccess(`  ✅ PENDING correctly skipped webhook trigger`);
+            results.push({
+              status: testCase.status,
+              paymentMode: testCase.paymentMode,
+              transactionId: payInResult.response.id,
+              webhookTriggered: false,
+              passed: true,
+              reason: "Webhook correctly skipped for pending transaction",
+            });
+          } else {
+            logError(`  ❌ PENDING incorrectly triggered webhook`);
+            results.push({
+              status: testCase.status,
+              paymentMode: testCase.paymentMode,
+              transactionId: payInResult.response.id,
+              webhookTriggered: true,
+              passed: false,
+              error: "Webhook should not trigger for pending",
+            });
+          }
+        } else if (testCase.status === "FAILED") {
+          // FAILED should trigger webhook
+          if (webhookResult && webhookResult.success) {
+            logSuccess(`  ✅ FAILED webhook triggered successfully`);
+            results.push({
+              status: testCase.status,
+              paymentMode: testCase.paymentMode,
+              transactionId: payInResult.response.id,
+              webhookTriggered: true,
+              webhookSuccess: true,
+              passed: true,
+            });
+          } else {
+            logError(`  ❌ FAILED webhook failed`);
+            results.push({
+              status: testCase.status,
+              paymentMode: testCase.paymentMode,
+              transactionId: payInResult.response.id,
+              webhookTriggered: true,
+              webhookSuccess: false,
+              passed: false,
+              error: webhookResult?.error || "Webhook failed",
+            });
+          }
+        }
+      } catch (error) {
+        logError(`  ❌ Error: ${error.message}`);
+        if (error.response) {
+          logError(`  Response: ${JSON.stringify(error.response.data)}`);
+        }
+        results.push({
+          status: testCase.status,
+          paymentMode: testCase.paymentMode,
+          success: false,
+          passed: false,
+          error: error.message,
+        });
+      }
+    }
+
+    // Summary
+    logSection("PENDING & FAILED STATUS RESULTS");
+    const passed = results.filter((r) => r.passed).length;
+    console.log(`Total Tests: ${results.length}`);
+    console.log(`Passed: ${passed}`);
+    console.log(`Failed: ${results.length - passed}`);
+
+    // Show details
+    results.forEach((r) => {
+      const status = r.passed ? "✅" : "❌";
+      console.log(
+        `${status} ${r.status} (${r.paymentMode}): ${r.passed ? "PASSED" : r.error || "FAILED"}`,
+      );
+    });
+
+    return { results, passed, total: results.length };
+  } catch (error) {
+    logError(`Mixed status test failed: ${error.message}`);
+    throw error;
+  }
+}
+
+module.exports = { testMixedStatus };
+
+==================== C:\Users\DELL\Desktop\Automation\src\utils\crypto.js ====================
+const crypto = require('crypto');
+
+/**
+ * Generate HMAC SHA-256 signature
+ * @param {string} merchantReference - The merchant reference/order ID
+ * @param {string} clientSecret - The client secret key
+ * @returns {string} - Hex signature
+ */
+function generateSignature(merchantReference, clientSecret) {
+  return crypto
+    .createHmac('sha256', clientSecret)
+    .update(merchantReference)
+    .digest('hex');
+}
+
+/**
+ * Generate unique merchant reference
+ * Format: ORD-{7 digit random number}
+ * @returns {string} - e.g., ORD-3848934
+ */
+function generateMerchantReference() {
+  const random7Digits = Math.floor(1000000 + Math.random() * 9000000);
+  return `ORD-${random7Digits}`;
+}
+
+/**
+ * Generate unique merchant reference with timestamp (alternative)
+ * @returns {string} - e.g., ORD-1735123456789
+ */
+function generateMerchantReferenceWithTimestamp() {
+  return `ORD-${Date.now()}`;
+}
+
+module.exports = {
+  generateSignature,
+  generateMerchantReference,
+  generateMerchantReferenceWithTimestamp
+};
+
+==================== C:\Users\DELL\Desktop\Automation\src\utils\logger.js ====================
+const winston = require('winston');
+const fs = require('fs');
+const path = require('path');
+
+// Create reports directory if it doesn't exist
+const reportsDir = path.join(__dirname, '../../reports');
+if (!fs.existsSync(reportsDir)) {
+  fs.mkdirSync(reportsDir, { recursive: true });
+}
+
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.colorize(),
+    winston.format.printf(({ timestamp, level, message }) => {
+      return `${timestamp} [${level}]: ${message}`;
+    })
+  ),
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({
+      filename: path.join(reportsDir, 'automation.log')
+    })
+  ]
+});
+
+function logSuccess(message) {
+  logger.info(`✅ ${message}`);
+}
+
+function logError(message) {
+  logger.error(`❌ ${message}`);
+}
+
+function logWarning(message) {
+  logger.warn(`⚠️ ${message}`);
+}
+
+function logInfo(message) {
+  logger.info(`ℹ️ ${message}`);
+}
+
+function logSection(title) {
+  console.log('\n' + '='.repeat(60));
+  console.log(`📋 ${title}`);
+  console.log('='.repeat(60));
+}
+
+module.exports = {
+  logger,
+  logSuccess,
+  logError,
+  logWarning,
+  logInfo,
+  logSection
+};
+
+==================== C:\Users\DELL\Desktop\Automation\src\utils\random.js ====================
+// International Names
+const firstNames = [
+  'John', 'Emma', 'Michael', 'Sophia', 'William', 'Olivia', 'James', 'Ava',
+  'Alexander', 'Isabella', 'Daniel', 'Mia', 'David', 'Charlotte', 'Joseph', 'Amelia',
+  'Benjamin', 'Harper', 'Samuel', 'Evelyn', 'Matthew', 'Abigail', 'Andrew', 'Emily',
+  'Joshua', 'Elizabeth', 'Christopher', 'Sofia', 'Gabriel', 'Avery', 'Ryan', 'Scarlett',
+  'Nathan', 'Victoria', 'Caleb', 'Grace', 'Jonathan', 'Chloe', 'Christian', 'Zoey'
+];
+
+const lastNames = [
+  'Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis',
+  'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Wilson', 'Anderson', 'Thomas', 'Taylor',
+  'Moore', 'Jackson', 'Martin', 'Lee', 'Perez', 'Thompson', 'White', 'Harris',
+  'Sanchez', 'Clark', 'Ramirez', 'Lewis', 'Robinson', 'Walker', 'Young', 'Allen',
+  'King', 'Wright', 'Scott', 'Torres', 'Nguyen', 'Hill', 'Flores', 'Green'
+];
+
+const emailDomains = [
+  'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
+  'icloud.com', 'protonmail.com', 'gmx.com', 'mail.com',
+  'aol.com', 'zoho.com', 'yandex.com', 'tutanota.com'
+];
+
+const countryCodes = [
+  '+1', '+44', '+61', '+91', '+86', '+81', '+49', '+33',
+  '+39', '+55', '+52', '+82', '+31', '+46', '+41', '+65',
+  '+971', '+966', '+27', '+34', '+7', '+61', '+64', '+351',
+  '+353', '+45', '+47', '+46', '+41', '+61', '+64', '+65'
+];
+
+const paymentModes = ['UPI', 'CARD', 'WALLET', 'NETBANKING'];
+
+function random(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function randomInt(min, max) {
+  return Math.floor(min + Math.random() * (max - min + 1));
+}
+
+function randomName() {
+  return `${random(firstNames)} ${random(lastNames)}`;
+}
+
+function randomEmail(name) {
+  const cleanName = name.toLowerCase().replace(' ', '.');
+  const num = randomInt(100, 99999);
+  return `${cleanName}${num}@${random(emailDomains)}`;
+}
+
+function randomPhone() {
+  const code = random(countryCodes);
+  const length = Math.random() > 0.5 ? 10 : 9;
+  let number = '';
+  for (let i = 0; i < length; i++) {
+    number += randomInt(0, 9);
+  }
+  return `${code} ${number}`;
+}
+
+function randomAmount(min = 100, max = 5000) {
+  return Math.round((min + Math.random() * (max - min)) * 100) / 100;
+}
+
+function randomPaymentMode() {
+  return random(paymentModes);
+}
+
+function randomCustomer() {
+  const name = randomName();
+  return {
+    name: name,
+    email: randomEmail(name),
+    phone: randomPhone()
+  };
+}
+
+module.exports = {
+  randomName,
+  randomEmail,
+  randomPhone,
+  randomAmount,
+  randomPaymentMode,
+  randomCustomer,
+  randomInt,
+  random
+};
+
+==================== C:\Users\DELL\Desktop\Automation\src\utils\webhook-trigger.js ====================
+// // FILE: src/utils/webhook-trigger.js
+// const axios = require("axios");
+// const config = require("../config");
+// const { logSuccess, logError, logInfo, logWarning } = require("./logger");
+
+// /**
+//  * Detect which gateway was used based on response data
+//  */
+// function detectGateway(response) {
+//   if (!response) return null;
+
+//   // Check gatewayId if present (from DB)
+//   if (response.gatewayId) {
+//     const gatewayMap = {
+//       1: "RAZORPAY",
+//       2: "CASHFREE",
+//       3: "ADYEN",
+//       4: "CHARGEBEE",
+//     };
+//     return gatewayMap[response.gatewayId] || null;
+//   }
+
+//   // Check response.gatewayName field
+//   if (response.gatewayName) {
+//     const name = response.gatewayName.toUpperCase();
+//     if (name.includes("RAZORPAY")) return "RAZORPAY";
+//     if (name.includes("CASHFREE")) return "CASHFREE";
+//     if (name.includes("ADYEN")) return "ADYEN";
+//   }
+
+//   // Check response.gateway field
+//   if (response.gateway) {
+//     const gw =
+//       typeof response.gateway === "string"
+//         ? response.gateway.toUpperCase()
+//         : response.gateway;
+//     if (gw.includes("RAZORPAY")) return "RAZORPAY";
+//     if (gw.includes("CASHFREE")) return "CASHFREE";
+//     if (gw.includes("ADYEN")) return "ADYEN";
+//   }
+
+//   // Check intent for gateway identification
+//   if (response.intent) {
+//     try {
+//       const intent =
+//         typeof response.intent === "string"
+//           ? JSON.parse(response.intent)
+//           : response.intent;
+
+//       // Razorpay: has 'key' starting with rzp_test
+//       if (intent.key && intent.key.startsWith("rzp_test")) return "RAZORPAY";
+
+//       // Cashfree: has paymentSessionId AND appId starting with TEST
+//       if (
+//         intent.paymentSessionId ||
+//         (intent.appId && intent.appId.startsWith("TEST"))
+//       ) {
+//         return "CASHFREE";
+//       }
+
+//       // Adyen: has sessionId starting with CS
+//       if (intent.sessionId && intent.sessionId.startsWith("CS")) return "ADYEN";
+
+//       // Adyen: has pspReference
+//       if (intent.pspReference) return "ADYEN";
+
+//       // Adyen: has clientKey starting with test_
+//       if (intent.clientKey && intent.clientKey.startsWith("test_"))
+//         return "ADYEN";
+//     } catch (e) {}
+//   }
+
+//   return null;
+// }
+
+// /**
+//  * Get webhook payload for specific gateway with different statuses
+//  * @param {string} gateway - Gateway name
+//  * @param {string} merchantReference - Merchant reference
+//  * @param {number} amount - Payment amount
+//  * @param {string} paymentMode - Payment mode
+//  * @param {object} customer - Customer details
+//  * @param {object} intentData - Parsed intent data from pay-in response
+//  * @param {string} status - Payment status ('SUCCESS', 'FAILED', 'PENDING')
+//  */
+// function getWebhookPayload(
+//   gateway,
+//   merchantReference,
+//   amount,
+//   paymentMode,
+//   customer,
+//   intentData = {},
+//   status = "SUCCESS",
+// ) {
+//   const amountInPaise = Math.round(amount * 100);
+
+//   switch (gateway) {
+//     case "RAZORPAY": {
+//       const orderId =
+//         intentData.order_id ||
+//         `order_${Math.random().toString(36).substr(2, 10)}`;
+//       const paymentId = `pay_${Math.random().toString(36).substr(2, 10)}`;
+
+//       // Base payload structure
+//       const basePayload = {
+//         payload: {
+//           payment: {
+//             entity: {
+//               id: paymentId,
+//               entity: "payment",
+//               amount: amountInPaise,
+//               currency: "INR",
+//               order_id: orderId,
+//               invoice_id: null,
+//               international: false,
+//               method: paymentMode.toLowerCase(),
+//               amount_refunded: 0,
+//               refund_status: null,
+//               captured: status === "SUCCESS",
+//               description: `Payment for ${merchantReference}`,
+//               card_id: null,
+//               bank: "HDFC Bank",
+//               wallet: null,
+//               vpa: null,
+//               email: customer.email,
+//               contact: customer.phone.replace(/[^0-9]/g, ""),
+//               notes: {
+//                 customerName: customer.name,
+//                 customerEmail: customer.email,
+//                 customerPhone: customer.phone,
+//                 merchantReference: merchantReference,
+//               },
+//               fee: 0,
+//               tax: 0,
+//               acquirer_data: {
+//                 rrn: Math.random().toString().substr(2, 12),
+//               },
+//               created_at: Math.floor(Date.now() / 1000),
+//             },
+//           },
+//           order: {
+//             entity: {
+//               id: orderId,
+//               entity: "order",
+//               amount: amountInPaise,
+//               amount_paid: status === "SUCCESS" ? amountInPaise : 0,
+//               amount_due: status === "SUCCESS" ? 0 : amountInPaise,
+//               currency: "INR",
+//               receipt: merchantReference,
+//               offer_id: null,
+//               attempts: 1,
+//               notes: {
+//                 customerName: customer.name,
+//                 customerEmail: customer.email,
+//                 customerPhone: customer.phone,
+//                 merchantReference: merchantReference,
+//               },
+//               created_at: Math.floor(Date.now() / 1000) - 60,
+//             },
+//           },
+//         },
+//         created_at: Math.floor(Date.now() / 1000),
+//       };
+
+//       // Customize based on status
+//       switch (status) {
+//         case "SUCCESS":
+//           basePayload.event = "payment.captured";
+//           basePayload.payload.payment.entity.status = "captured";
+//           basePayload.payload.order.entity.status = "paid";
+//           break;
+
+//         case "FAILED":
+//           basePayload.event = "payment.failed";
+//           basePayload.payload.payment.entity.status = "failed";
+//           basePayload.payload.payment.entity.error_code = "PAYMENT_FAILED";
+//           basePayload.payload.payment.entity.error_description =
+//             "Payment failed due to insufficient funds";
+//           basePayload.payload.payment.entity.error_source = "bank";
+//           basePayload.payload.payment.entity.error_step =
+//             "payment_authorization";
+//           basePayload.payload.payment.entity.error_reason =
+//             "insufficient_funds";
+//           basePayload.payload.order.entity.status = "attempted";
+//           break;
+
+//         case "PENDING":
+//           basePayload.event = "payment.pending";
+//           basePayload.payload.payment.entity.status = "pending";
+//           basePayload.payload.order.entity.status = "created";
+//           break;
+//       }
+
+//       return basePayload;
+//     }
+
+//     case "CASHFREE": {
+//       const orderId =
+//         intentData.orderId || `order_${merchantReference}_${Date.now()}`;
+//       const paymentId = `pay_${Math.random().toString(36).substr(2, 10)}`;
+
+//       // Map status to Cashfree statuses
+//       const cashfreeStatusMap = {
+//         SUCCESS: "SUCCESS",
+//         FAILED: "FAILED",
+//         PENDING: "PENDING",
+//       };
+
+//       const cfStatus = cashfreeStatusMap[status] || "SUCCESS";
+
+//       // Map status to event type
+//       const eventTypeMap = {
+//         SUCCESS: "PAYMENT_SUCCESS_WEBHOOK",
+//         FAILED: "PAYMENT_FAILED_WEBHOOK",
+//         PENDING: "PAYMENT_PENDING_WEBHOOK",
+//       };
+
+//       return {
+//         type: eventTypeMap[status] || "PAYMENT_SUCCESS_WEBHOOK",
+//         data: {
+//           order: {
+//             order_id: orderId,
+//             order_amount: amount,
+//             order_currency: "INR",
+//             order_status:
+//               cfStatus === "SUCCESS"
+//                 ? "PAID"
+//                 : cfStatus === "FAILED"
+//                   ? "FAILED"
+//                   : "ACTIVE",
+//             order_expiry_time: new Date(
+//               Date.now() + 7 * 24 * 60 * 60 * 1000,
+//             ).toISOString(),
+//             order_note: `Payment for ${merchantReference}`,
+//             created_at: new Date().toISOString(),
+//           },
+//           payment: {
+//             payment_id: paymentId,
+//             order_id: orderId,
+//             payment_amount: amount,
+//             payment_status: cfStatus,
+//             payment_method: paymentMode,
+//             payment_time: new Date().toISOString(),
+//             bank_reference:
+//               cfStatus === "SUCCESS"
+//                 ? Math.random().toString().substr(2, 12)
+//                 : null,
+//             utr:
+//               cfStatus === "SUCCESS"
+//                 ? Math.random().toString().substr(2, 12)
+//                 : null,
+//             acquirer_data:
+//               cfStatus === "SUCCESS"
+//                 ? {
+//                     rrn: Math.random().toString().substr(2, 12),
+//                   }
+//                 : null,
+//             customer_details: {
+//               customer_name: customer.name,
+//               customer_email: customer.email,
+//               customer_phone: customer.phone,
+//             },
+//             // Add failure reason for FAILED status
+//             ...(cfStatus === "FAILED" && {
+//               payment_message: "Transaction failed at bank end",
+//               failure_reason: "Insufficient balance",
+//             }),
+//           },
+//         },
+//       };
+//     }
+
+//     case "ADYEN": {
+//       const reference =
+//         intentData.reference || `${merchantReference}_${Date.now()}`;
+//       const sessionId = intentData.sessionId || null;
+
+//       // Map status to Adyen event codes
+//       const eventCodeMap = {
+//         SUCCESS: "AUTHORISATION",
+//         FAILED: "REFUSED",
+//         PENDING: "PENDING",
+//       };
+
+//       const reasonMap = {
+//         SUCCESS: "0000:Authorised",
+//         FAILED: "1000:Refused",
+//         PENDING: "0100:Pending",
+//       };
+
+//       return {
+//         live: "false",
+//         notificationItems: [
+//           {
+//             NotificationRequestItem: {
+//               additionalData: {
+//                 ...(status === "SUCCESS"
+//                   ? {
+//                       authCode: Math.random().toString().substr(2, 6),
+//                       avsResult: "0",
+//                       cvcResult: "0",
+//                       responseCode: "0000",
+//                       totalFraudScore: "0",
+//                     }
+//                   : {
+//                       responseCode: status === "FAILED" ? "1000" : "0100",
+//                       refusalReason:
+//                         status === "FAILED" ? "Insufficient Funds" : null,
+//                     }),
+//               },
+//               amount: {
+//                 currency: "INR",
+//                 value: amountInPaise,
+//               },
+//               eventCode: eventCodeMap[status] || "AUTHORISATION",
+//               eventDate: new Date().toISOString(),
+//               merchantAccountCode: "HlleoCOM",
+//               merchantReference: reference,
+//               paymentMethod: paymentMode.toLowerCase(),
+//               pspReference:
+//                 sessionId ||
+//                 `AYDEN_PSP_REF_${Math.random().toString(36).substr(2, 10)}`,
+//               reason: reasonMap[status] || "0000:Authorised",
+//               success: status === "SUCCESS" ? "true" : "false",
+//             },
+//           },
+//         ],
+//       };
+//     }
+
+//     default:
+//       return null;
+//   }
+// }
+
+// /**
+//  * Automatically trigger the appropriate webhook based on gateway and status
+//  * @param {object} payInResult - Pay-in result
+//  * @param {string} forceStatus - Force a specific status ('SUCCESS', 'FAILED', 'PENDING')
+//  */
+// async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
+//   const { request, response } = payInResult;
+//   const { merchantReference, paymentMode, customer } = request;
+//   const amount = parseFloat(response.amountToCredit) || request.amount;
+
+//   // Detect which gateway was used
+//   const gateway = detectGateway(response);
+
+//   if (!gateway) {
+//     logError(`❌ Could not detect gateway for ${merchantReference}`);
+//     return null;
+//   }
+
+//   // If PENDING, don't trigger webhook (payment is not complete)
+//   if (forceStatus === "PENDING") {
+//     logWarning(
+//       `⏳ Skipping webhook for PENDING transaction ${merchantReference}`,
+//     );
+//     return {
+//       gateway,
+//       status: "PENDING",
+//       webhookTriggered: false,
+//       reason: "Pending transactions do not trigger webhooks",
+//     };
+//   }
+
+//   const status = forceStatus || "SUCCESS";
+//   logInfo(
+//     `🔄 Triggering ${gateway} webhook (${status}) for ${merchantReference}...`,
+//   );
+
+//   // Parse intent to extract real IDs
+//   let intentData = null;
+//   if (response.intent) {
+//     try {
+//       intentData =
+//         typeof response.intent === "string"
+//           ? JSON.parse(response.intent)
+//           : response.intent;
+//     } catch (e) {}
+//   }
+
+//   // Get webhook payload with real intent data and status
+//   const webhookPayload = getWebhookPayload(
+//     gateway,
+//     merchantReference,
+//     amount,
+//     paymentMode,
+//     customer,
+//     intentData,
+//     status, // Pass status!
+//   );
+
+//   if (!webhookPayload) {
+//     logError(`❌ No webhook payload for ${gateway}`);
+//     return null;
+//   }
+
+//   // Get webhook URL
+//   const webhookUrls = {
+//     RAZORPAY: config.API_PATHS.WEBHOOKS.RAZORPAY,
+//     CASHFREE: config.API_PATHS.WEBHOOKS.CASHFREE,
+//     ADYEN: config.API_PATHS.WEBHOOKS.ADYEN,
+//   };
+
+//   const webhookUrl = `${config.BASE_URL}${webhookUrls[gateway]}`;
+
+//   try {
+//     const webhookResponse = await axios.post(webhookUrl, webhookPayload, {
+//       headers: { "Content-Type": "application/json" },
+//     });
+
+//     logSuccess(`✅ ${gateway} webhook (${status}) triggered successfully`);
+//     return { gateway, status, success: true, response: webhookResponse.data };
+//   } catch (error) {
+//     logError(`❌ ${gateway} webhook (${status}) failed: ${error.message}`);
+//     if (error.response) {
+//       logError(`Status: ${error.response.status}`);
+//       logError(`Response: ${JSON.stringify(error.response.data)}`);
+//     }
+//     return { gateway, status, success: false, error: error.message };
+//   }
+// }
+
+// module.exports = { triggerWebhookForPayIn, detectGateway, getWebhookPayload };
+
+
+
+
+
+
+
+
+
+// utils/webhook-trigger.js
+const axios = require('axios');
+const logger = require('./logger');
+
+class WebhookTrigger {
+  constructor() {
+    this.activeWebhooks = new Map();
+    this.webhookQueue = [];
+    this.isProcessing = false;
+  }
+
+  async triggerWebhookAsync(payload) {
+    const webhookId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    return new Promise((resolve) => {
+      // Add to queue
+      this.webhookQueue.push({
+        id: webhookId,
+        payload,
+        resolve,
+        timestamp: Date.now()
+      });
+      
+      // Process queue asynchronously
+      this.processQueue();
+    });
+  }
+
+  async processQueue() {
+    if (this.isProcessing || this.webhookQueue.length === 0) {
+      return;
+    }
+
+    this.isProcessing = true;
+
+    while (this.webhookQueue.length > 0) {
+      const webhookItem = this.webhookQueue.shift();
+      
+      // Process webhook in background
+      this.executeWebhook(webhookItem)
+        .then(result => {
+          webhookItem.resolve(result);
+        })
+        .catch(error => {
+          logger.error(`Webhook ${webhookItem.id} failed`, error);
+          webhookItem.resolve({ 
+            status: 'FAILED', 
+            error: error.message 
+          });
+        });
+    }
+
+    this.isProcessing = false;
+  }
+
+  async executeWebhook(webhookItem) {
+    const { payload } = webhookItem;
+    
+    try {
+      // Get webhook URL from merchant config
+      const webhookUrl = payload.merchantId === 1 ? 'https://github.com' : 
+                         payload.merchantId === 2 ? 'https://wehbook.com' : 
+                         'https://webhook.com';
+      
+      logger.info(`🌐 Triggering webhook for merchant ${payload.merchantId}`);
+      
+      // Send webhook without waiting for response
+      const response = await axios.post(webhookUrl, {
+        event: 'PAYIN_COMPLETED',
+        timestamp: new Date().toISOString(),
+        data: payload,
+        webhookId: webhookItem.id
+      }, {
+        timeout: 5000, // 5 second timeout
+        validateStatus: () => true // Don't throw on any status
+      });
+
+      return {
+        status: 'SENT',
+        response: response.data,
+        statusCode: response.status
+      };
+
+    } catch (error) {
+      return {
+        status: 'FAILED',
+        error: error.message
+      };
+    }
+  }
+
+  // Method to check webhook status
+  getWebhookStatus(webhookId) {
+    return this.activeWebhooks.get(webhookId) || null;
+  }
+}
+
+module.exports = new WebhookTrigger();
+
+==================== C:\Users\DELL\Desktop\Automation\src\validators\response.js ====================
+const { logger, logSuccess, logError, logInfo, logWarning } = require('../utils/logger');
+
+/**
+ * Validate pay-in response
+ * @param {object} response - Pay-in API response
+ * @param {object} request - Request data
+ * @param {number} expectedGatewayId - Expected gateway ID
+ * @returns {object}
+ */
+function validatePayInResponse(response, request, expectedGatewayId) {
+  const result = {
+    valid: true,
+    errors: [],
+    warnings: []
+  };
+
+  // Check required fields
+  if (!response.id) {
+    result.valid = false;
+    result.errors.push('Missing transaction ID');
+  }
+
+  if (!response.status) {
+    result.valid = false;
+    result.errors.push('Missing status');
+  }
+
+  if (response.merchantReference !== request.merchantReference) {
+    result.valid = false;
+    result.errors.push(`Merchant reference mismatch: Expected ${request.merchantReference}, Got ${response.merchantReference}`);
+  }
+
+  if (parseFloat(response.amount) !== request.amount) {
+    result.warnings.push(`Amount mismatch: Expected ${request.amount}, Got ${response.amount}`);
+  }
+
+  // Check if gateway routing is correct
+  // Note: Gateway ID is not directly in response, we need to check intent or other fields
+  if (response.intent) {
+    try {
+      const intent = JSON.parse(response.intent);
+      if (intent.key) {
+        // Razorpay key indicates Razorpay gateway
+        const actualGateway = intent.key.startsWith('rzp_test') ? 1 : null;
+        if (actualGateway && actualGateway !== expectedGatewayId) {
+          result.warnings.push(`Gateway mismatch: Expected ${expectedGatewayId}, Got ${actualGateway}`);
+        }
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Validate webhook response
+ * @param {object} response - Webhook API response
+ * @returns {object}
+ */
+function validateWebhookResponse(response) {
+  const result = {
+    valid: true,
+    errors: []
+  };
+
+  if (!response || typeof response !== 'object') {
+    result.valid = false;
+    result.errors.push('Invalid webhook response');
+    return result;
+  }
+
+  // Check for success or error
+  if (response.error) {
+    result.valid = false;
+    result.errors.push(response.error);
+  }
+
+  if (response.success === false) {
+    result.valid = false;
+    result.errors.push('Webhook processing failed');
+  }
+
+  return result;
+}
+
+/**
+ * Check if routing is correct
+ * @param {object} response - Pay-in response
+ * @param {number} expectedGatewayId - Expected gateway ID
+ * @returns {boolean}
+ */
+function isRoutingCorrect(response, expectedGatewayId) {
+  // Try to extract gateway from response
+  let actualGatewayId = null;
+  
+  if (response.intent) {
+    try {
+      const intent = JSON.parse(response.intent);
+      if (intent.key) {
+        if (intent.key.startsWith('rzp_test')) {
+          actualGatewayId = 1; // Razorpay
+        } else if (intent.key.includes('cashfree')) {
+          actualGatewayId = 2; // Cashfree
+        } else if (intent.key.includes('adyen')) {
+          actualGatewayId = 3; // Adyen
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  // If we can't determine actual gateway, assume correct
+  if (actualGatewayId === null) {
+    return true;
+  }
+
+  return actualGatewayId === expectedGatewayId;
+}
+
+module.exports = {
+  validatePayInResponse,
+  validateWebhookResponse,
+  isRoutingCorrect
+};
+

@@ -49,65 +49,122 @@
 
 
 
+// config/routing.js
 module.exports = {
-  // Merchant 1 (Aman Pandey) - Updated to match DB
-  1: {
-    priorities: [
-      { gatewayId: 1, name: "Razorpay", priority: 1, paymentModes: ["UPI"] },
-      { gatewayId: 2, name: "Cashfree", priority: 2, paymentModes: ["WALLET"] },
-      {
-        gatewayId: 3,
-        name: "Adyen",
-        priority: 3,
-        paymentModes: ["NETBANKING"],
-      },
-      { gatewayId: 2, name: "Cashfree", priority: 4, paymentModes: ["CARD"] },
-    ],
-    expectedGateway: {
-      UPI: { gatewayId: 1, name: "Razorpay" }, // Changed
-      WALLET: { gatewayId: 2, name: "Cashfree" }, // Changed
-      NETBANKING: { gatewayId: 3, name: "Adyen" }, // Changed
-      CARD: { gatewayId: 2, name: "Cashfree" }, // Changed
+  merchants: {
+    '1': {
+      id: 1,
+      name: 'Merchant1',
+      routingStrategy: 'PRIORITY',
+      gateways: [
+        { id: 1, name: 'Razorpay', priority: 1, maxRetries: 3 },
+        { id: 2, name: 'Cashfree', priority: 2, maxRetries: 3 },
+        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 }
+      ]
     },
-  },
-  // Merchant 2 (Sonia Kalonia) - Updated to match DB
-  2: {
-    priorities: [
-      { gatewayId: 3, name: "Adyen", priority: 1, paymentModes: ["UPI"] },
-      { gatewayId: 1, name: "Razorpay", priority: 2, paymentModes: ["CARD"] },
-      { gatewayId: 2, name: "Cashfree", priority: 3, paymentModes: ["WALLET"] },
-      {
-        gatewayId: 1,
-        name: "Razorpay",
-        priority: 4,
-        paymentModes: ["NETBANKING"],
-      },
-    ],
-    expectedGateway: {
-      UPI: { gatewayId: 3, name: "Adyen" }, // Changed
-      CARD: { gatewayId: 1, name: "Razorpay" }, // Same
-      WALLET: { gatewayId: 2, name: "Cashfree" }, // Changed
-      NETBANKING: { gatewayId: 1, name: "Razorpay" }, // Added
+    '2': {
+      id: 2,
+      name: 'Merchant2',
+      routingStrategy: 'HYBRID',
+      gateways: [
+        { id: 3, name: 'Adyen', priority: 1, maxRetries: 3 },
+        { id: 1, name: 'Razorpay', priority: 2, maxRetries: 3 },
+        { id: 2, name: 'Cashfree', priority: 3, maxRetries: 3 }
+      ]
     },
-  },
-  // Merchant 3 (Piyush Kirola) - Updated to match DB
-  3: {
-    priorities: [
-      { gatewayId: 2, name: "Cashfree", priority: 1, paymentModes: ["CARD"] },
-      {
-        gatewayId: 1,
-        name: "Razorpay",
-        priority: 2,
-        paymentModes: ["NETBANKING"],
-      },
-      { gatewayId: 3, name: "Adyen", priority: 3, paymentModes: ["WALLET"] },
-      { gatewayId: 2, name: "Cashfree", priority: 4, paymentModes: ["UPI"] },
-    ],
-    expectedGateway: {
-      CARD: { gatewayId: 2, name: "Cashfree" }, // Changed
-      NETBANKING: { gatewayId: 1, name: "Razorpay" }, // Added
-      WALLET: { gatewayId: 3, name: "Adyen" }, // Changed
-      UPI: { gatewayId: 2, name: "Cashfree" }, // Same
+    '3': {
+      id: 3,
+      name: 'Merchant3',
+      routingStrategy: 'HYBRID',
+      gateways: [
+        { id: 2, name: 'Cashfree', priority: 1, maxRetries: 3 },
+        { id: 1, name: 'Razorpay', priority: 2, maxRetries: 3 },
+        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 }
+      ]
     },
+    '4': {
+      id: 4,
+      name: 'Merchant4',
+      routingStrategy: 'PRIORITY',
+      gateways: [
+        { id: 2, name: 'Cashfree', priority: 1, maxRetries: 3 },
+        { id: 3, name: 'Adyen', priority: 2, maxRetries: 3 },
+        { id: 1, name: 'Razorpay', priority: 3, maxRetries: 3 }
+      ]
+    },
+    '5': {
+      id: 5,
+      name: 'Merchant5',
+      routingStrategy: 'PRIORITY',
+      gateways: [
+        { id: 1, name: 'Razorpay', priority: 1, maxRetries: 3 },
+        { id: 2, name: 'Cashfree', priority: 2, maxRetries: 3 },
+        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 }
+      ]
+    },
+    '6': {
+      id: 6,
+      name: 'Merchant6',
+      routingStrategy: 'FAILOVER',
+      gateways: [
+        { id: 3, name: 'Adyen', priority: 1, maxRetries: 3 },
+        { id: 1, name: 'Razorpay', priority: 2, maxRetries: 3 },
+        { id: 2, name: 'Cashfree', priority: 3, maxRetries: 3 }
+      ]
+    },
+    '7': {
+      id: 7,
+      name: 'Merchant7',
+      routingStrategy: 'PRIORITY',
+      gateways: [
+        { id: 2, name: 'Cashfree', priority: 1, maxRetries: 3 },
+        { id: 3, name: 'Adyen', priority: 2, maxRetries: 3 },
+        { id: 1, name: 'Razorpay', priority: 3, maxRetries: 3 }
+      ]
+    },
+    '8': {
+      id: 8,
+      name: 'Merchant8',
+      routingStrategy: 'PRIORITY',
+      gateways: [
+        { id: 2, name: 'Cashfree', priority: 1, maxRetries: 3 },
+        { id: 1, name: 'Razorpay', priority: 2, maxRetries: 3 },
+        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 }
+      ]
+    },
+    '9': {
+      id: 9,
+      name: 'Merchant9',
+      routingStrategy: 'PRIORITY',
+      gateways: [
+        { id: 2, name: 'Cashfree', priority: 1, maxRetries: 3 },
+        { id: 1, name: 'Razorpay', priority: 2, maxRetries: 3 },
+        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 }
+      ]
+    },
+    '10': {
+      id: 10,
+      name: 'Merchant10',
+      routingStrategy: 'PRIORITY',
+      gateways: [
+        { id: 2, name: 'Cashfree', priority: 1, maxRetries: 3 },
+        { id: 1, name: 'Razorpay', priority: 2, maxRetries: 3 },
+        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 }
+      ]
+    }
   },
+  // Helper function to get merchant by ID
+  getMerchant: function(id) {
+    return this.merchants[id];
+  },
+  // Helper function to get gateways for merchant
+  getGateways: function(merchantId) {
+    const merchant = this.merchants[merchantId];
+    return merchant ? merchant.gateways : [];
+  },
+  // Helper function to get routing strategy
+  getStrategy: function(merchantId) {
+    const merchant = this.merchants[merchantId];
+    return merchant ? merchant.routingStrategy : null;
+  }
 };

@@ -5,14 +5,24 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "test": "jest",
-    "dev": "nodemon src/index.js"
+    "test": "node src/index.js",
+    "test:unified": "node -e \"require('./src/tests/10-unified-routing-test').testUnifiedRouting().then(() => process.exit(0)).catch(() => process.exit(1))\"",
+    "test:priority": "node -e \"require('./src/tests/01-priority-routing').testPriorityRouting()\"",
+    "test:failover": "node -e \"require('./src/tests/02-failover-routing').testFailoverRouting()\"",
+    "test:hybrid": "node -e \"require('./src/tests/03-hybrid-routing').testHybridRouting()\"",
+    "test:default": "node -e \"require('./src/tests/04-default-routing').testDefaultRouting()\"",
+    "test:retry": "node -e \"require('./src/tests/05-retry-logic').testRetryLogic()\"",
+    "test:mdr": "node -e \"require('./src/tests/06-mdr-calculation').testMDRCalculation()\"",
+    "test:webhook": "node -e \"require('./src/tests/07-webhook-processing').testWebhookProcessing()\"",
+    "test:e2e": "node -e \"require('./src/tests/08-end-to-end-flow').testEndToEndFlow()\"",
+    "test:mixed": "node -e \"require('./src/tests/09-mixed-status').testMixedStatus()\""
   },
   "dependencies": {
     "axios": "^1.6.0",
     "bcrypt": "^6.0.0",
     "crypto": "^1.0.1",
     "dotenv": "^16.6.1",
+    "pg": "^8.22.0",
     "winston": "^3.11.0"
   },
   "devDependencies": {
