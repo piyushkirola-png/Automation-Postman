@@ -30,8 +30,26 @@ async function simulateAdyenWebhook(data) {
 }
 
 /**
+ * Simulate Chargebee webhook
+ * @param {object} data - Webhook payload
+ * @returns {Promise<object>}
+ */
+async function simulateChargebeeWebhook(data) {
+  return simulateWebhook('CHARGEBEE', data);
+}
+
+/**
+ * Simulate Bennupay webhook
+ * @param {object} data - Webhook payload
+ * @returns {Promise<object>}
+ */
+async function simulateBennupayWebhook(data) {
+  return simulateWebhook('BENNUPAY', data);
+}
+
+/**
  * Simulate any webhook
- * @param {string} gateway - 'CASHFREE', 'RAZORPAY', 'ADYEN'
+ * @param {string} gateway - 'CASHFREE', 'RAZORPAY', 'ADYEN','CHARGEBEE','BENNUPAY'
  * @param {object} data - Webhook payload
  * @returns {Promise<object>}
  */
@@ -40,22 +58,24 @@ async function simulateWebhook(gateway, data) {
     const paths = {
       CASHFREE: config.API_PATHS.WEBHOOKS.CASHFREE,
       RAZORPAY: config.API_PATHS.WEBHOOKS.RAZORPAY,
-      ADYEN: config.API_PATHS.WEBHOOKS.ADYEN
+      ADYEN: config.API_PATHS.WEBHOOKS.ADYEN,
+      CHARGEBEE: config.API_PATHS.WEBHOOKS.CHARGEBEE,
+      BENNUPAY: config.API_PATHS.WEBHOOKS.BENNUPAY
     };
-    
+
     const url = `${config.BASE_URL}${paths[gateway]}`;
-    
+
     logInfo(`Simulating ${gateway} webhook...`);
-    
+
     const response = await axios.post(url, data, {
       headers: {
         'Content-Type': 'application/json'
       }
     });
-    
+
     logSuccess(`${gateway} webhook processed`);
     return response.data;
-    
+
   } catch (error) {
     logError(`${gateway} webhook failed: ${error.message}`);
     if (error.response) {
@@ -76,7 +96,7 @@ async function simulateWebhook(gateway, data) {
  */
 function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
   const amountInPaise = Math.round(amount * 100);
-  
+
   // Cashfree payload
   const cashfreePayload = {
     type: 'PAYMENT_SUCCESS_WEBHOOK',
@@ -205,10 +225,50 @@ function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
     ]
   };
 
+  // Chargebee payload
+  const chargebeePayload = {
+    event: 'payment_success',
+    customer: {
+      email: customer.email,
+      name: customer.name,
+      phone: customer.phone
+    },
+    transaction: {
+      id: `ch_${Math.random().toString(36).substr(2, 10)}`,
+      amount: amount,
+      currency: 'INR',
+      status: 'success',
+      reference_id: merchantReference,
+      payment_method: paymentMode.toLowerCase()
+    },
+    created_at: new Date().toISOString()
+  };
+
+  // Bennupay payload
+  const bennupayPayload = {
+    event: 'payment.completed',
+    data: {
+      transaction_id: `bp_${Math.random().toString(36).substr(2, 10)}`,
+      merchant_reference: merchantReference,
+      amount: amount,
+      currency: 'INR',
+      status: 'SUCCESS',
+      payment_mode: paymentMode,
+      customer: {
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone
+      },
+      timestamp: new Date().toISOString()
+    }
+  };
+
   return {
     cashfree: cashfreePayload,
     razorpay: razorpayPayload,
-    adyen: adyenPayload
+    adyen: adyenPayload,
+    chargebee: chargebeePayload,
+    bennupay: bennupayPayload
   };
 }
 
@@ -216,6 +276,8 @@ module.exports = {
   simulateCashfreeWebhook,
   simulateRazorpayWebhook,
   simulateAdyenWebhook,
+  simulateChargebeeWebhook,
+  simulateBennupayWebhook,
   simulateWebhook,
   getWebhookPayloads
 };

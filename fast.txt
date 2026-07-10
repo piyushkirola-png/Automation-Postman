@@ -1,0 +1,179 @@
+PAYU
+Req
+{
+    "amount": 150,
+    "currency": "INR",
+    "merchantReference": "ORD-73427272111",
+    "paymentMode": "CARD",
+    "customer": {
+        "name": "John Doe",
+        "email": "john@example.com",
+        "phone": "9896543210"
+    },
+    "card": {
+        "cardNumber": "4111111111111111",
+        "expiryMonth": 12,
+        "expiryYear": 2026,
+        "cvv": "123",
+        "cardHolderName": "John Doe"
+    }
+}
+Res
+{
+    "utr": "",
+    "id": 19283,
+    "merchantId": 14,
+    "amount": "150",
+    "status": "PROCESSING",
+    "merchantReference": "ORD-73427272111",
+    "requestedAt": "2026-07-10T13:18:35.828Z",
+    "completedAt": null,
+    "expiresAt": null,
+    "merchantRate": "0",
+    "payInWalletTransactionId": null,
+    "failureReason": null,
+    "failureCode": null,
+    "taxRate": "0",
+    "taxAmount": "0",
+    "feeType": "PERCENTAGE",
+    "feeRate": "0",
+    "feeAmount": "3",
+    "amountToCredit": "147",
+    "callbackNeeded": true,
+    "url": null,
+    "createdAt": "2026-07-10T13:18:35.830Z",
+    "updatedAt": "2026-07-10T13:18:35.840Z",
+    "intent": null
+}
+
+url = http://localhost:4000/api/webhooks/payu POST
+{
+    "txnid": "ORD-73427272111",
+    "mihpayid": "PayU_Transaction_ID_123456789",
+    "amount": "150.00",
+    "status": "success",
+    "mode": "CC",
+    "unmappedstatus": "captured",
+    "bank_ref_num": "BANK_REF_987654321",
+    "bankcode": "CC",
+    "error": "E000",
+    "error_Message": "No Error",
+    "udf1": "ORD-73427272111",
+    "udf2": null,
+    "udf3": null,
+    "udf4": null,   
+    "udf5": null,
+    "udf6": null,
+    "udf7": null,
+    "udf8": null,
+    "udf9": null,
+    "udf10": null,
+    "hash": "generated_hash_string_here",
+    "firstname": "John Doe",
+    "email": "john@example.com",
+    "phone": "9896543210"
+}
+
+STRIPE
+Req
+{
+    "amount": 150,
+    "currency": "INR",
+    "merchantReference": "ORD-7342727211112",
+    "paymentMode": "CARD",
+    "customer": {
+        "name": "John Doe",
+        "email": "john@example.com",
+        "phone": "9896543210"
+    },
+    "card": {
+        "cardNumber": "4111111111111111",
+        "expiryMonth": 12,
+        "expiryYear": 2026,
+        "cvv": "123",
+        "cardHolderName": "John Doe"
+    }
+}
+
+Res
+{
+    "utr": "",
+    "id": 19284,
+    "merchantId": 15,
+    "amount": "150",
+    "status": "PROCESSING",
+    "merchantReference": "ORD-7342727211112",
+    "requestedAt": "2026-07-10T13:22:58.969Z",
+    "completedAt": null,
+    "expiresAt": null,
+    "merchantRate": "0",
+    "payInWalletTransactionId": null,
+    "failureReason": null,
+    "failureCode": null,
+    "taxRate": "0",
+    "taxAmount": "0",
+    "feeType": "PERCENTAGE",
+    "feeRate": "0",
+    "feeAmount": "2.7",
+    "amountToCredit": "147.3",
+    "callbackNeeded": true,
+    "url": null,
+    "createdAt": "2026-07-10T13:22:58.971Z",
+    "updatedAt": "2026-07-10T13:23:00.315Z",
+    "intent": null
+}
+
+url = http://localhost:4000/api/webhooks/stripe POST
+{
+    "id": "evt_123456789",
+    "type": "payment_intent.succeeded",
+    "created": 1718012345,
+    "data": {
+        "object": {
+            "id": "pi_123456789",
+            "object": "payment_intent",
+            "amount": 15000,
+            "amount_capturable": 0,
+            "amount_received": 15000,
+            "currency": "inr",
+            "status": "succeeded",
+            "payment_method": "pm_123456789",
+            "payment_method_types": [
+                "card"
+            ],
+            "receipt_email": "john@example.com",
+            "description": "Payment for order ORD-7342727211112",
+            "metadata": {
+                "order_id": "ORD-7342727211112",
+                "merchant_reference": "ORD-7342727211112"
+            },
+            "charges": {
+                "data": [
+                    {
+                        "id": "ch_123456789",
+                        "amount": 15000,
+                        "currency": "inr",
+                        "status": "succeeded",
+                        "payment_method_details": {
+                            "card": {
+                                "brand": "visa",
+                                "last4": "1111",
+                                "network": "visa"
+                            }
+                        },
+                        "receipt_url": "https://pay.stripe.com/receipts/...",
+                        "balance_transaction": "txn_123456789"
+                    }
+                ]
+            },
+            "latest_charge": "ch_123456789",
+            "customer": "cus_123456789"
+        }
+    },
+    "livemode": false,
+    "pending_webhooks": 0,
+    "request": {
+        "id": "req_123456789",
+        "idempotency_key": "abc123"
+    }
+}

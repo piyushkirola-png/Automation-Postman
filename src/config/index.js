@@ -8,7 +8,9 @@ module.exports = {
     WEBHOOKS: {
       CASHFREE: '/api/webhooks/cashfree',
       RAZORPAY: '/api/webhooks/razorpay',
-      ADYEN: '/api/webhooks/adyen'
+      ADYEN: '/api/webhooks/adyen',
+      CHARGEBEE: '/api/webhooks/chargebee',
+      BENNUPAY: '/api/webhooks/bennupay'
     }
   },
   TEST_CONFIG: {
@@ -21,6 +23,7 @@ module.exports = {
     RAZORPAY: 1,
     CASHFREE: 2,
     ADYEN: 3,
-    CHARGEBEE: 4
+    CHARGEBEE: 4,
+    BENNUPAY: 5
   }
 };

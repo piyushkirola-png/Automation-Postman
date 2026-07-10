@@ -9,7 +9,7 @@ const pool = new Pool({
   user: process.env.DB_USER || "postgres",
   password: process.env.DB_PASSWORD || "",
   database: process.env.DB_NAME || "yourdbname",
-  max: 20, // Maximum number of clients in the pool
+  max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
 });
@@ -25,7 +25,6 @@ pool.on("error", (err) => {
 
 /**
  * Get routing configuration for merchants 1-10
- * Only returns gateways 1, 2, 3 (Razorpay, Cashfree, Adyen)
  */
 async function getRoutingConfig() {
   const query = `
@@ -50,7 +49,6 @@ async function getRoutingConfig() {
     WHERE mp.id BETWEEN 1 AND 10
       AND mp."isActive" = true
       AND mgp."isActive" = true
-      AND mgp."gatewayId" IN (1, 2, 3)
     ORDER BY mp.id, mgp.priority
   `;
 

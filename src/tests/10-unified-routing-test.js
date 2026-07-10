@@ -17,7 +17,7 @@ const {
 } = require("../config/db");
 
 // ============== CONFIGURATION ==============
-const ALLOWED_GATEWAYS = [1, 2, 3]; // Razorpay, Cashfree, Adyen
+const ALLOWED_GATEWAYS = [1, 2, 3, 4, 5];
 const ALL_PAYMENT_MODES = ["UPI", "CARD", "WALLET", "NETBANKING"];
 const ITERATIONS_PER_MODE = parseInt(process.env.ITERATIONS_PER_MODE) || 10;
 const MIN_AMOUNT = parseInt(process.env.MIN_AMOUNT) || 1000;
@@ -92,7 +92,7 @@ function detectGatewayFromResponse(response) {
       if (intent.clientKey && intent.clientKey.startsWith("test_")) {
         return "Adyen";
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // 2. Check gatewayId
@@ -250,7 +250,7 @@ async function testMerchant(merchantConfig) {
               if (intent.key && intent.key.startsWith("rzp_test")) {
                 gatewayName = "Razorpay";
               }
-            } catch (e) {}
+            } catch (e) { }
           }
 
           // Method 2: From gatewayId

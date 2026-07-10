@@ -1,6 +1,4 @@
 ==================== C:\Users\DELL\Desktop\Automation\src\index.js ====================
-#!/usr/bin/env node
-
 const { testPriorityRouting } = require("./tests/01-priority-routing");
 const { testFailoverRouting } = require("./tests/02-failover-routing");
 const { testHybridRouting } = require("./tests/03-hybrid-routing");
@@ -10,6 +8,7 @@ const { testMDRCalculation } = require("./tests/06-mdr-calculation");
 const { testWebhookProcessing } = require("./tests/07-webhook-processing");
 const { testEndToEndFlow } = require("./tests/08-end-to-end-flow");
 const { testMixedStatus } = require("./tests/09-mixed-status");
+const { testUnifiedRouting } = require("./tests/10-unified-routing-test");
 const { logSection, logSuccess, logError, logInfo } = require("./utils/logger");
 const fs = require("fs");
 const path = require("path");
@@ -22,7 +21,7 @@ async function runAllTests() {
   ║                                                            ║
   ║     Testing: Priority | Failover | Hybrid | Default        ║
   ║              Retry | MDR | Webhook | End-to-End           ║
-  ║              Mixed Status (NEW!)                          ║
+  ║              Mixed Status | Unified (NEW!)               ║
   ║                                                            ║
   ║     Start Time: ${new Date().toLocaleString()}                     ║
   ║                                                            ║
@@ -79,6 +78,19 @@ async function runAllTests() {
     results.mixedStatus = r9;
     totalTests += r9.total || 0;
     totalPassed += r9.passed || 0;
+
+    // ==============================================
+    // TEST 10: UNIFIED ROUTING TEST (NEW!)
+    // ==============================================
+    const r10 = await testUnifiedRouting();
+    results.unifiedRouting = r10;
+
+    // Calculate unified test stats
+    if (r10 && r10.summary) {
+      totalTests += r10.summary.totalTransactions || 0;
+      totalPassed += r10.summary.passed || 0;
+    }
+    // ==============================================
 
   } catch (error) {
     logError(`Test suite failed: ${error.message}`);
@@ -338,8 +350,26 @@ async function simulateAdyenWebhook(data) {
 }
 
 /**
+ * Simulate Chargebee webhook
+ * @param {object} data - Webhook payload
+ * @returns {Promise<object>}
+ */
+async function simulateChargebeeWebhook(data) {
+  return simulateWebhook('CHARGEBEE', data);
+}
+
+/**
+ * Simulate Bennupay webhook
+ * @param {object} data - Webhook payload
+ * @returns {Promise<object>}
+ */
+async function simulateBennupayWebhook(data) {
+  return simulateWebhook('BENNUPAY', data);
+}
+
+/**
  * Simulate any webhook
- * @param {string} gateway - 'CASHFREE', 'RAZORPAY', 'ADYEN'
+ * @param {string} gateway - 'CASHFREE', 'RAZORPAY', 'ADYEN','CHARGEBEE','BENNUPAY'
  * @param {object} data - Webhook payload
  * @returns {Promise<object>}
  */
@@ -348,22 +378,24 @@ async function simulateWebhook(gateway, data) {
     const paths = {
       CASHFREE: config.API_PATHS.WEBHOOKS.CASHFREE,
       RAZORPAY: config.API_PATHS.WEBHOOKS.RAZORPAY,
-      ADYEN: config.API_PATHS.WEBHOOKS.ADYEN
+      ADYEN: config.API_PATHS.WEBHOOKS.ADYEN,
+      CHARGEBEE: config.API_PATHS.WEBHOOKS.CHARGEBEE,
+      BENNUPAY: config.API_PATHS.WEBHOOKS.BENNUPAY
     };
-    
+
     const url = `${config.BASE_URL}${paths[gateway]}`;
-    
+
     logInfo(`Simulating ${gateway} webhook...`);
-    
+
     const response = await axios.post(url, data, {
       headers: {
         'Content-Type': 'application/json'
       }
     });
-    
+
     logSuccess(`${gateway} webhook processed`);
     return response.data;
-    
+
   } catch (error) {
     logError(`${gateway} webhook failed: ${error.message}`);
     if (error.response) {
@@ -384,7 +416,7 @@ async function simulateWebhook(gateway, data) {
  */
 function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
   const amountInPaise = Math.round(amount * 100);
-  
+
   // Cashfree payload
   const cashfreePayload = {
     type: 'PAYMENT_SUCCESS_WEBHOOK',
@@ -513,10 +545,50 @@ function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
     ]
   };
 
+  // Chargebee payload
+  const chargebeePayload = {
+    event: 'payment_success',
+    customer: {
+      email: customer.email,
+      name: customer.name,
+      phone: customer.phone
+    },
+    transaction: {
+      id: `ch_${Math.random().toString(36).substr(2, 10)}`,
+      amount: amount,
+      currency: 'INR',
+      status: 'success',
+      reference_id: merchantReference,
+      payment_method: paymentMode.toLowerCase()
+    },
+    created_at: new Date().toISOString()
+  };
+
+  // Bennupay payload
+  const bennupayPayload = {
+    event: 'payment.completed',
+    data: {
+      transaction_id: `bp_${Math.random().toString(36).substr(2, 10)}`,
+      merchant_reference: merchantReference,
+      amount: amount,
+      currency: 'INR',
+      status: 'SUCCESS',
+      payment_mode: paymentMode,
+      customer: {
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone
+      },
+      timestamp: new Date().toISOString()
+    }
+  };
+
   return {
     cashfree: cashfreePayload,
     razorpay: razorpayPayload,
-    adyen: adyenPayload
+    adyen: adyenPayload,
+    chargebee: chargebeePayload,
+    bennupay: bennupayPayload
   };
 }
 
@@ -524,8 +596,170 @@ module.exports = {
   simulateCashfreeWebhook,
   simulateRazorpayWebhook,
   simulateAdyenWebhook,
+  simulateChargebeeWebhook,
+  simulateBennupayWebhook,
   simulateWebhook,
   getWebhookPayloads
+};
+
+==================== C:\Users\DELL\Desktop\Automation\src\config\db.js ====================
+// src/config/db.js
+const { Pool } = require("pg");
+require("dotenv").config();
+
+// Create connection pool
+const pool = new Pool({
+  host: process.env.DB_HOST || "localhost",
+  port: parseInt(process.env.DB_PORT) || 5432,
+  user: process.env.DB_USER || "postgres",
+  password: process.env.DB_PASSWORD || "",
+  database: process.env.DB_NAME || "yourdbname",
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+
+// Test connection
+pool.on("connect", () => {
+  console.log("✅ Connected to database");
+});
+
+pool.on("error", (err) => {
+  console.error("❌ Unexpected database error:", err);
+});
+
+/**
+ * Get routing configuration for merchants 1-10
+ */
+async function getRoutingConfig() {
+  const query = `
+    SELECT 
+      mp.id AS "merchantId",
+      mp.name AS "merchantName",
+      mrp."routingStrategy",
+      mrp.id AS "routingPrefId",
+      mgp."gatewayId",
+      mgp.priority,
+      mgp."paymentModes",
+      mgp."enableFailover",
+      mgp."maxRetries",
+      g.name AS "gatewayName"
+    FROM merchants mp
+    JOIN merchant_routing_preferences mrp
+      ON mp.id = mrp."merchantId"
+    JOIN merchant_gateway_priorities mgp
+      ON mrp.id = mgp."merchantRoutingPrefId"
+    JOIN gateways g
+      ON mgp."gatewayId" = g.id
+    WHERE mp.id BETWEEN 1 AND 10
+      AND mp."isActive" = true
+      AND mgp."isActive" = true
+    ORDER BY mp.id, mgp.priority
+  `;
+
+  try {
+    const result = await pool.query(query);
+    return result.rows;
+  } catch (error) {
+    console.error("❌ Error fetching routing config:", error);
+    throw error;
+  }
+}
+
+/**
+ * Build merchant config from raw query results
+ */
+function buildMerchantConfig(rawData) {
+  const merchantMap = new Map();
+
+  for (const row of rawData) {
+    const {
+      merchantId,
+      merchantName,
+      routingStrategy,
+      routingPrefId,
+      gatewayId,
+      priority,
+      paymentModes,
+      enableFailover,
+      maxRetries,
+      gatewayName,
+    } = row;
+
+    if (!merchantMap.has(merchantId)) {
+      merchantMap.set(merchantId, {
+        merchantId,
+        merchantName,
+        routingStrategy,
+        routingPrefId,
+        gateways: [],
+        paymentModeMap: {},
+      });
+    }
+
+    const merchant = merchantMap.get(merchantId);
+
+    // Parse paymentModes (it's stored as JSON array like {UPI} or ["UPI"])
+    let modes = [];
+    try {
+      if (typeof paymentModes === "string") {
+        // Handle PostgreSQL array format: {UPI,CARD} or ["UPI","CARD"]
+        if (paymentModes.startsWith("{")) {
+          modes = paymentModes.replace(/[{}]/g, "").split(",");
+        } else {
+          modes = JSON.parse(paymentModes);
+        }
+      } else if (Array.isArray(paymentModes)) {
+        modes = paymentModes;
+      }
+    } catch (e) {
+      modes = [];
+    }
+
+    const gatewayEntry = {
+      gatewayId,
+      gatewayName,
+      priority,
+      paymentModes: modes,
+      enableFailover,
+      maxRetries,
+    };
+
+    merchant.gateways.push(gatewayEntry);
+
+    // Build payment mode map (highest priority for each mode)
+    for (const mode of modes) {
+      if (
+        !merchant.paymentModeMap[mode] ||
+        priority < merchant.paymentModeMap[mode].priority
+      ) {
+        merchant.paymentModeMap[mode] = {
+          gatewayId,
+          gatewayName,
+          priority,
+          enableFailover,
+          maxRetries,
+        };
+      }
+    }
+  }
+
+  return Array.from(merchantMap.values());
+}
+
+/**
+ * Close database connection
+ */
+async function closeDbConnection() {
+  await pool.end();
+  console.log("📴 Database connection closed");
+}
+
+module.exports = {
+  pool,
+  getRoutingConfig,
+  buildMerchantConfig,
+  closeDbConnection,
 };
 
 ==================== C:\Users\DELL\Desktop\Automation\src\config\index.js ====================
@@ -539,7 +773,9 @@ module.exports = {
     WEBHOOKS: {
       CASHFREE: '/api/webhooks/cashfree',
       RAZORPAY: '/api/webhooks/razorpay',
-      ADYEN: '/api/webhooks/adyen'
+      ADYEN: '/api/webhooks/adyen',
+      CHARGEBEE: '/api/webhooks/chargebee',
+      BENNUPAY: '/api/webhooks/bennupay'
     }
   },
   TEST_CONFIG: {
@@ -552,62 +788,12 @@ module.exports = {
     RAZORPAY: 1,
     CASHFREE: 2,
     ADYEN: 3,
-    CHARGEBEE: 4
+    CHARGEBEE: 4,
+    BENNUPAY: 5
   }
 };
 
 ==================== C:\Users\DELL\Desktop\Automation\src\config\routing.js ====================
-// // Expected routing rules based on database
-// module.exports = {
-//   // Merchant 1 (Aman Pandey)
-//   1: {
-//     priorities: [
-//       { gatewayId: 1, name: 'Razorpay', priority: 1, paymentModes: ['CARD', 'WALLET'] },
-//       { gatewayId: 2, name: 'Cashfree', priority: 2, paymentModes: ['UPI', 'CARD', 'WALLET'] },
-//       { gatewayId: 3, name: 'Adyen', priority: 3, paymentModes: ['UPI', 'WALLET'] }
-//     ],
-//     expectedGateway: {
-//       'CARD': { gatewayId: 1, name: 'Razorpay' },
-//       'WALLET': { gatewayId: 1, name: 'Razorpay' },
-//       'UPI': { gatewayId: 2, name: 'Cashfree' },
-//       'NETBANKING': { gatewayId: 1, name: 'Razorpay' }
-//     }
-//   },
-//   // Merchant 2 (Sonia Kalonia)
-//   2: {
-//     priorities: [
-//       { gatewayId: 1, name: 'Razorpay', priority: 1, paymentModes: ['CARD'] },
-//       { gatewayId: 2, name: 'Cashfree', priority: 2, paymentModes: ['UPI', 'CARD', 'WALLET'] },
-//       { gatewayId: 3, name: 'Adyen', priority: 3, paymentModes: ['UPI', 'WALLET'] }
-//     ],
-//     expectedGateway: {
-//       'CARD': { gatewayId: 1, name: 'Razorpay' },
-//       'UPI': { gatewayId: 2, name: 'Cashfree' },
-//       'WALLET': { gatewayId: 3, name: 'Adyen' },
-//       'NETBANKING': null,
-//     }
-//   },
-//   // Merchant 3 (Piyush Kirola) - No priorities configured (Default)
-//   3: {
-//     priorities: [],
-//     expectedGateway: {
-//       'CARD': { gatewayId: 1, name: 'Razorpay' },
-//       'UPI': { gatewayId: 2, name: 'Cashfree' },
-//       'WALLET': { gatewayId: 1, name: 'Razorpay' },
-//       'NETBANKING': null
-//     }
-//   }
-// };
-
-
-
-
-
-
-
-
-
-
 // config/routing.js
 module.exports = {
   merchants: {
@@ -618,7 +804,9 @@ module.exports = {
       gateways: [
         { id: 1, name: 'Razorpay', priority: 1, maxRetries: 3 },
         { id: 2, name: 'Cashfree', priority: 2, maxRetries: 3 },
-        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 }
+        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 },
+        { id: 4, name: 'Chargebee', priority: 4, maxRetries: 3 },
+        { id: 5, name: 'Bennupay', priority: 5, maxRetries: 3 }
       ]
     },
     '2': {
@@ -628,7 +816,9 @@ module.exports = {
       gateways: [
         { id: 3, name: 'Adyen', priority: 1, maxRetries: 3 },
         { id: 1, name: 'Razorpay', priority: 2, maxRetries: 3 },
-        { id: 2, name: 'Cashfree', priority: 3, maxRetries: 3 }
+        { id: 2, name: 'Cashfree', priority: 3, maxRetries: 3 },
+        { id: 4, name: 'Chargebee', priority: 4, maxRetries: 3 },
+        { id: 5, name: 'Bennupay', priority: 5, maxRetries: 3 }
       ]
     },
     '3': {
@@ -638,7 +828,9 @@ module.exports = {
       gateways: [
         { id: 2, name: 'Cashfree', priority: 1, maxRetries: 3 },
         { id: 1, name: 'Razorpay', priority: 2, maxRetries: 3 },
-        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 }
+        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 },
+        { id: 4, name: 'Chargebee', priority: 4, maxRetries: 3 },
+        { id: 5, name: 'Bennupay', priority: 5, maxRetries: 3 }
       ]
     },
     '4': {
@@ -648,7 +840,9 @@ module.exports = {
       gateways: [
         { id: 2, name: 'Cashfree', priority: 1, maxRetries: 3 },
         { id: 3, name: 'Adyen', priority: 2, maxRetries: 3 },
-        { id: 1, name: 'Razorpay', priority: 3, maxRetries: 3 }
+        { id: 1, name: 'Razorpay', priority: 3, maxRetries: 3 },
+        { id: 4, name: 'Chargebee', priority: 4, maxRetries: 3 },
+        { id: 5, name: 'Bennupay', priority: 5, maxRetries: 3 }
       ]
     },
     '5': {
@@ -658,7 +852,9 @@ module.exports = {
       gateways: [
         { id: 1, name: 'Razorpay', priority: 1, maxRetries: 3 },
         { id: 2, name: 'Cashfree', priority: 2, maxRetries: 3 },
-        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 }
+        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 },
+        { id: 4, name: 'Chargebee', priority: 4, maxRetries: 3 },
+        { id: 5, name: 'Bennupay', priority: 5, maxRetries: 3 }
       ]
     },
     '6': {
@@ -668,7 +864,9 @@ module.exports = {
       gateways: [
         { id: 3, name: 'Adyen', priority: 1, maxRetries: 3 },
         { id: 1, name: 'Razorpay', priority: 2, maxRetries: 3 },
-        { id: 2, name: 'Cashfree', priority: 3, maxRetries: 3 }
+        { id: 2, name: 'Cashfree', priority: 3, maxRetries: 3 },
+        { id: 4, name: 'Chargebee', priority: 4, maxRetries: 3 },
+        { id: 5, name: 'Bennupay', priority: 5, maxRetries: 3 }
       ]
     },
     '7': {
@@ -678,7 +876,9 @@ module.exports = {
       gateways: [
         { id: 2, name: 'Cashfree', priority: 1, maxRetries: 3 },
         { id: 3, name: 'Adyen', priority: 2, maxRetries: 3 },
-        { id: 1, name: 'Razorpay', priority: 3, maxRetries: 3 }
+        { id: 1, name: 'Razorpay', priority: 3, maxRetries: 3 },
+        { id: 4, name: 'Chargebee', priority: 4, maxRetries: 3 },
+        { id: 5, name: 'Bennupay', priority: 5, maxRetries: 3 }
       ]
     },
     '8': {
@@ -688,7 +888,9 @@ module.exports = {
       gateways: [
         { id: 2, name: 'Cashfree', priority: 1, maxRetries: 3 },
         { id: 1, name: 'Razorpay', priority: 2, maxRetries: 3 },
-        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 }
+        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 },
+        { id: 4, name: 'Chargebee', priority: 4, maxRetries: 3 },
+        { id: 5, name: 'Bennupay', priority: 5, maxRetries: 3 }
       ]
     },
     '9': {
@@ -698,7 +900,9 @@ module.exports = {
       gateways: [
         { id: 2, name: 'Cashfree', priority: 1, maxRetries: 3 },
         { id: 1, name: 'Razorpay', priority: 2, maxRetries: 3 },
-        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 }
+        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 },
+        { id: 4, name: 'Chargebee', priority: 4, maxRetries: 3 },
+        { id: 5, name: 'Bennupay', priority: 5, maxRetries: 3 }
       ]
     },
     '10': {
@@ -708,21 +912,23 @@ module.exports = {
       gateways: [
         { id: 2, name: 'Cashfree', priority: 1, maxRetries: 3 },
         { id: 1, name: 'Razorpay', priority: 2, maxRetries: 3 },
-        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 }
+        { id: 3, name: 'Adyen', priority: 3, maxRetries: 3 },
+        { id: 4, name: 'Chargebee', priority: 4, maxRetries: 3 },
+        { id: 5, name: 'Bennupay', priority: 5, maxRetries: 3 }
       ]
     }
   },
   // Helper function to get merchant by ID
-  getMerchant: function(id) {
+  getMerchant: function (id) {
     return this.merchants[id];
   },
   // Helper function to get gateways for merchant
-  getGateways: function(merchantId) {
+  getGateways: function (merchantId) {
     const merchant = this.merchants[merchantId];
     return merchant ? merchant.gateways : [];
   },
   // Helper function to get routing strategy
-  getStrategy: function(merchantId) {
+  getStrategy: function (merchantId) {
     const merchant = this.merchants[merchantId];
     return merchant ? merchant.routingStrategy : null;
   }
@@ -1914,6 +2120,510 @@ async function testMixedStatus() {
 
 module.exports = { testMixedStatus };
 
+==================== C:\Users\DELL\Desktop\Automation\src\tests\10-unified-routing-test.js ====================
+const { loginUser } = require("../api/auth");
+const { createPayIn } = require("../api/payin");
+const { triggerWebhookForPayIn } = require("../utils/webhook-trigger");
+const { randomAmount, randomCustomer } = require("../utils/random");
+const {
+  logSection,
+  logSuccess,
+  logError,
+  logInfo,
+  logWarning,
+} = require("../utils/logger");
+const usersConfig = require("../config/users");
+const {
+  getRoutingConfig,
+  buildMerchantConfig,
+  closeDbConnection,
+} = require("../config/db");
+
+// ============== CONFIGURATION ==============
+const ALLOWED_GATEWAYS = [1, 2, 3, 4, 5];
+const ALL_PAYMENT_MODES = ["UPI", "CARD", "WALLET", "NETBANKING"];
+const ITERATIONS_PER_MODE = parseInt(process.env.ITERATIONS_PER_MODE) || 10;
+const MIN_AMOUNT = parseInt(process.env.MIN_AMOUNT) || 1000;
+const MAX_AMOUNT = parseInt(process.env.MAX_AMOUNT) || 50000;
+
+// ==========================================
+
+/**
+ * Get random amount in multiples of 1000
+ */
+function randomAmountInMultiples(min, max) {
+  const minThousands = Math.ceil(min / 1000);
+  const maxThousands = Math.floor(max / 1000);
+  const randomThousands =
+    Math.floor(Math.random() * (maxThousands - minThousands + 1)) +
+    minThousands;
+  return randomThousands * 1000;
+}
+
+/**
+ * Get user credentials for a merchant
+ */
+function getUserForMerchant(merchantId) {
+  for (const [key, user] of Object.entries(usersConfig.users)) {
+    if (user.merchantId === merchantId) {
+      return {
+        email: user.email,
+        password: "12345678",
+        userId: user.id,
+        merchantId: user.merchantId,
+        name: user.name,
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Detect gateway from pay-in response
+ */
+function detectGatewayFromResponse(response) {
+  if (!response) return null;
+
+  // 1. Check intent field
+  if (response.intent) {
+    try {
+      const intent =
+        typeof response.intent === "string"
+          ? JSON.parse(response.intent)
+          : response.intent;
+
+      // Razorpay: key starts with rzp_test
+      if (intent.key && intent.key.startsWith("rzp_test")) {
+        return "Razorpay";
+      }
+
+      // Cashfree: paymentSessionId or appId
+      if (intent.paymentSessionId) {
+        return "Cashfree";
+      }
+      if (intent.appId && intent.appId.startsWith("TEST")) {
+        return "Cashfree";
+      }
+
+      // Adyen: sessionId, pspReference, or clientKey
+      if (intent.sessionId && intent.sessionId.startsWith("CS")) {
+        return "Adyen";
+      }
+      if (intent.pspReference) {
+        return "Adyen";
+      }
+      if (intent.clientKey && intent.clientKey.startsWith("test_")) {
+        return "Adyen";
+      }
+    } catch (e) { }
+  }
+
+  // 2. Check gatewayId
+  if (response.gatewayId) {
+    const gatewayMap = { 1: "Razorpay", 2: "Cashfree", 3: "Adyen" };
+    return gatewayMap[response.gatewayId] || null;
+  }
+
+  // 3. Check gatewayName
+  if (response.gatewayName) {
+    const name = response.gatewayName.toUpperCase();
+    if (name.includes("RAZORPAY")) return "Razorpay";
+    if (name.includes("CASHFREE")) return "Cashfree";
+    if (name.includes("ADYEN")) return "Adyen";
+  }
+
+  // 4. Check paymentGateway field
+  if (response.paymentGateway) {
+    const name = response.paymentGateway.toUpperCase();
+    if (name.includes("RAZORPAY")) return "Razorpay";
+    if (name.includes("CASHFREE")) return "Cashfree";
+    if (name.includes("ADYEN")) return "Adyen";
+  }
+
+  return null;
+}
+
+/**
+ * Test a single merchant
+ */
+async function testMerchant(merchantConfig) {
+  const { merchantId, merchantName, routingStrategy, paymentModeMap } =
+    merchantConfig;
+
+  logSection(
+    `🧪 TESTING MERCHANT ${merchantId}: ${merchantName} (${routingStrategy})`,
+  );
+
+  // Get user credentials
+  const user = getUserForMerchant(merchantId);
+  if (!user) {
+    logError(`❌ No user found for merchant ${merchantId}`);
+    return {
+      merchantId,
+      merchantName,
+      routingStrategy,
+      error: "No user found",
+      results: [],
+      summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
+    };
+  }
+
+  logInfo(`👤 User: ${user.name} (${user.email})`);
+
+  let loginData;
+  try {
+    loginData = await loginUser(user.email, user.password);
+  } catch (error) {
+    logError(`❌ Login failed: ${error.message}`);
+    return {
+      merchantId,
+      merchantName,
+      routingStrategy,
+      error: `Login failed: ${error.message}`,
+      results: [],
+      summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
+    };
+  }
+
+  const { accessToken, clientSecret } = loginData;
+  console.log(
+    "🔑 Access Token (first 20 chars):",
+    accessToken ? accessToken.substring(0, 20) + "..." : "MISSING!",
+  );
+  console.log(
+    "🔑 Client Secret (first 20 chars):",
+    clientSecret ? clientSecret.substring(0, 20) + "..." : "MISSING!",
+  );
+  logSuccess(`✅ Logged in as ${user.email}`);
+
+  const allResults = [];
+  let total = 0,
+    passed = 0,
+    failed = 0,
+    skipped = 0;
+
+  // Test each payment mode
+  for (const paymentMode of ALL_PAYMENT_MODES) {
+    const expected = paymentModeMap[paymentMode];
+
+    // Check if this payment mode is mapped to allowed gateways (1, 2, 3)
+    if (!expected || !ALLOWED_GATEWAYS.includes(expected.gatewayId)) {
+      logWarning(
+        `⚠️ SKIPPING ${paymentMode} - Not configured for gateways 1-3`,
+      );
+
+      const skipResult = {
+        paymentMode,
+        expectedGateway: expected ? expected.gatewayName : "N/A",
+        expectedGatewayId: expected ? expected.gatewayId : null,
+        status: "SKIPPED",
+        reason: "Not configured for gateways 1, 2, or 3",
+        transactions: [],
+      };
+      allResults.push(skipResult);
+      skipped++;
+      continue;
+    }
+
+    logInfo(
+      `\n🔄 Testing ${paymentMode} → Expected: ${expected.gatewayName} (Priority ${expected.priority})`,
+    );
+
+    const modeResults = [];
+    const promises = [];
+
+    // Create all pay-ins in parallel
+    for (let i = 0; i < ITERATIONS_PER_MODE; i++) {
+      const amount = randomAmountInMultiples(MIN_AMOUNT, MAX_AMOUNT);
+      const customer = randomCustomer();
+      const merchantReference = `ORD-UNI-${merchantId}-${paymentMode}-${Date.now()}-${i}`;
+
+      const promise = createPayIn(accessToken, clientSecret, {
+        paymentMode,
+        amount,
+        customer,
+        merchantReference,
+      })
+        .then(async (payInResult) => {
+          // 🔥 TRIGGER WEBHOOK AND WAIT FOR IT
+          logInfo(`🔄 Triggering webhook for ${merchantReference}...`);
+
+          try {
+            const webhookResult = await triggerWebhookForPayIn(
+              payInResult,
+              "SUCCESS",
+            );
+            logInfo(
+              `✅ Webhook triggered: ${webhookResult ? "Success" : "Failed"}`,
+            );
+          } catch (webhookError) {
+            logError(`❌ Webhook failed: ${webhookError.message}`);
+          }
+
+          // NOW detect gateway from response (after webhook)
+          let gatewayName = null;
+
+          // Method 1: From intent
+          if (payInResult.response.intent) {
+            try {
+              const intent =
+                typeof payInResult.response.intent === "string"
+                  ? JSON.parse(payInResult.response.intent)
+                  : payInResult.response.intent;
+              if (intent.key && intent.key.startsWith("rzp_test")) {
+                gatewayName = "Razorpay";
+              }
+            } catch (e) { }
+          }
+
+          // Method 2: From gatewayId
+          if (!gatewayName && payInResult.response.gatewayId) {
+            const gwMap = { 1: "Razorpay", 2: "Cashfree", 3: "Adyen" };
+            gatewayName = gwMap[payInResult.response.gatewayId] || null;
+          }
+
+          // Method 3: From gatewayName
+          if (!gatewayName && payInResult.response.gatewayName) {
+            const name = payInResult.response.gatewayName.toUpperCase();
+            if (name.includes("RAZORPAY")) gatewayName = "Razorpay";
+            else if (name.includes("CASHFREE")) gatewayName = "Cashfree";
+            else if (name.includes("ADYEN")) gatewayName = "Adyen";
+          }
+
+          // Log detection
+          logInfo(
+            `📍 Detected: ${gatewayName || "Unknown"} | Expected: ${expected.gatewayName}`,
+          );
+
+          const isCorrect = gatewayName === expected.gatewayName;
+
+          return {
+            success: true,
+            iteration: i + 1,
+            amount,
+            merchantReference,
+            transactionId: payInResult.response.id,
+            status: payInResult.response.status,
+            expectedGateway: expected.gatewayName,
+            actualGateway: gatewayName || "Unknown",
+            isCorrect,
+            passed: isCorrect,
+            error: null,
+          };
+        })
+        .catch((error) => {
+          return {
+            success: false,
+            iteration: i + 1,
+            amount,
+            merchantReference,
+            transactionId: null,
+            status: null,
+            expectedGateway: expected.gatewayName,
+            actualGateway: null,
+            isCorrect: false,
+            passed: false,
+            error: error.message,
+          };
+        });
+
+      promises.push(promise);
+    }
+
+    // Wait for all pay-ins to complete (webhooks already triggered in background)
+    const results = await Promise.all(promises);
+
+    // Analyze results
+    let modePassed = 0,
+      modeFailed = 0;
+    for (const result of results) {
+      modeResults.push(result);
+      if (result.passed) {
+        modePassed++;
+        passed++;
+      } else {
+        modeFailed++;
+        failed++;
+      }
+      total++;
+    }
+
+    // Log mode summary
+    const passRate =
+      modeResults.length > 0
+        ? ((modePassed / modeResults.length) * 100).toFixed(0)
+        : 0;
+    if (modeFailed === 0) {
+      logSuccess(
+        `  ✅ ${paymentMode}: ${modePassed}/${modeResults.length} PASSED (${passRate}%)`,
+      );
+    } else {
+      logError(
+        `  ❌ ${paymentMode}: ${modePassed}/${modeResults.length} PASSED (${passRate}%)`,
+      );
+    }
+
+    allResults.push({
+      paymentMode,
+      expectedGateway: expected.gatewayName,
+      expectedGatewayId: expected.gatewayId,
+      priority: expected.priority,
+      status: modeFailed === 0 ? "PASSED" : "FAILED",
+      transactions: modeResults,
+    });
+  }
+
+  // Merchant summary
+  logSection(`📊 MERCHANT ${merchantId} SUMMARY`);
+  console.log(
+    `  Total: ${total} | Passed: ${passed} | Failed: ${failed} | Skipped: ${skipped}`,
+  );
+  const passRate = total > 0 ? ((passed / total) * 100).toFixed(1) : 0;
+  console.log(`  Pass Rate: ${passRate}%`);
+
+  return {
+    merchantId,
+    merchantName,
+    routingStrategy,
+    results: allResults,
+    summary: { total, passed, failed, skipped, passRate },
+  };
+}
+
+/**
+ * Main unified test function
+ */
+async function testUnifiedRouting() {
+  logSection("🚀 UNIFIED ROUTING TEST - ALL MERCHANTS 1-10");
+
+  console.log(`
+  ╔═══════════════════════════════════════════════════════════════════╗
+  ║  CONFIGURATION                                                  ║
+  ║  ├── Gateways: Razorpay (1), Cashfree (2), Adyen (3)           ║
+  ║  ├── Payment Modes: UPI, CARD, WALLET, NETBANKING              ║
+  ║  ├── Iterations per mode: ${ITERATIONS_PER_MODE}                              ║
+  ║  ├── Amount range: ₹${MIN_AMOUNT} - ₹${MAX_AMOUNT} (multiples of 1000)       ║
+  ║  └── Merchants: 1 to 10                                        ║
+  ╚═══════════════════════════════════════════════════════════════════╝
+  `);
+
+  try {
+    // 1. Fetch routing config from database
+    logInfo("📡 Fetching routing configuration from database...");
+    const rawData = await getRoutingConfig();
+
+    if (rawData.length === 0) {
+      logError(
+        "❌ No routing configuration found for merchants 1-10 with gateways 1-3",
+      );
+      await closeDbConnection();
+      return { error: "No configuration found" };
+    }
+
+    // 2. Build merchant config
+    const merchants = buildMerchantConfig(rawData);
+    logSuccess(`✅ Found ${merchants.length} merchants with routing config`);
+
+    // 3. Test each merchant
+    const merchantResults = [];
+    for (const merchant of merchants) {
+      const result = await testMerchant(merchant);
+      merchantResults.push(result);
+    }
+
+    // 4. Close database connection
+    await closeDbConnection();
+
+    // 5. Generate overall summary
+    logSection("📊 OVERALL TEST SUMMARY");
+
+    let totalAll = 0,
+      passedAll = 0,
+      failedAll = 0,
+      skippedAll = 0;
+
+    console.log(
+      "\n┌─────────────────────────────────────────────────────────────────────┐",
+    );
+    console.log(
+      "│                    MERCHANT RESULTS                                 │",
+    );
+    console.log(
+      "├─────────────────────────────────────────────────────────────────────┤",
+    );
+
+    for (const mr of merchantResults) {
+      const { merchantId, merchantName, routingStrategy, summary } = mr;
+      const status = summary.failed === 0 ? "✅ PASS" : "❌ FAIL";
+      const passRate =
+        summary.total > 0
+          ? ((summary.passed / summary.total) * 100).toFixed(1)
+          : 0;
+
+      console.log(
+        `│ ${merchantId}. ${merchantName.padEnd(15)} ${routingStrategy.padEnd(10)} │ Total: ${String(summary.total).padStart(3)} │ Pass: ${String(summary.passed).padStart(3)} │ Fail: ${String(summary.failed).padStart(3)} │ Skip: ${String(summary.skipped).padStart(3)} │ ${status} │`,
+      );
+
+      totalAll += summary.total;
+      passedAll += summary.passed;
+      failedAll += summary.failed;
+      skippedAll += summary.skipped;
+    }
+
+    console.log(
+      "├─────────────────────────────────────────────────────────────────────┤",
+    );
+    const overallPassRate =
+      totalAll > 0 ? ((passedAll / totalAll) * 100).toFixed(1) : 0;
+    console.log(
+      `│ ${"OVERALL".padEnd(35)} │ Total: ${String(totalAll).padStart(3)} │ Pass: ${String(passedAll).padStart(3)} │ Fail: ${String(failedAll).padStart(3)} │ Skip: ${String(skippedAll).padStart(3)} │ ${overallPassRate}% │`,
+    );
+    console.log(
+      "└─────────────────────────────────────────────────────────────────────┘",
+    );
+
+    // 6. Save detailed report
+    const report = {
+      timestamp: new Date().toISOString(),
+      configuration: {
+        gateways: ALLOWED_GATEWAYS,
+        paymentModes: ALL_PAYMENT_MODES,
+        iterationsPerMode: ITERATIONS_PER_MODE,
+        minAmount: MIN_AMOUNT,
+        maxAmount: MAX_AMOUNT,
+      },
+      merchants: merchantResults,
+      summary: {
+        totalTransactions: totalAll,
+        passed: passedAll,
+        failed: failedAll,
+        skipped: skippedAll,
+        passRate: `${overallPassRate}%`,
+      },
+    };
+
+    const fs = require("fs");
+    const path = require("path");
+    const reportDir = path.join(__dirname, "../../reports");
+    if (!fs.existsSync(reportDir)) {
+      fs.mkdirSync(reportDir, { recursive: true });
+    }
+    fs.writeFileSync(
+      path.join(reportDir, "unified-test-report.json"),
+      JSON.stringify(report, null, 2),
+    );
+    logSuccess(`📄 Detailed report saved to: reports/unified-test-report.json`);
+
+    return report;
+  } catch (error) {
+    logError(`❌ Test failed: ${error.message}`);
+    await closeDbConnection();
+    throw error;
+  }
+}
+
+module.exports = { testUnifiedRouting };
+
 ==================== C:\Users\DELL\Desktop\Automation\src\utils\crypto.js ====================
 const crypto = require('crypto');
 
@@ -2103,541 +2813,404 @@ module.exports = {
 };
 
 ==================== C:\Users\DELL\Desktop\Automation\src\utils\webhook-trigger.js ====================
-// // FILE: src/utils/webhook-trigger.js
-// const axios = require("axios");
-// const config = require("../config");
-// const { logSuccess, logError, logInfo, logWarning } = require("./logger");
-
-// /**
-//  * Detect which gateway was used based on response data
-//  */
-// function detectGateway(response) {
-//   if (!response) return null;
-
-//   // Check gatewayId if present (from DB)
-//   if (response.gatewayId) {
-//     const gatewayMap = {
-//       1: "RAZORPAY",
-//       2: "CASHFREE",
-//       3: "ADYEN",
-//       4: "CHARGEBEE",
-//     };
-//     return gatewayMap[response.gatewayId] || null;
-//   }
-
-//   // Check response.gatewayName field
-//   if (response.gatewayName) {
-//     const name = response.gatewayName.toUpperCase();
-//     if (name.includes("RAZORPAY")) return "RAZORPAY";
-//     if (name.includes("CASHFREE")) return "CASHFREE";
-//     if (name.includes("ADYEN")) return "ADYEN";
-//   }
-
-//   // Check response.gateway field
-//   if (response.gateway) {
-//     const gw =
-//       typeof response.gateway === "string"
-//         ? response.gateway.toUpperCase()
-//         : response.gateway;
-//     if (gw.includes("RAZORPAY")) return "RAZORPAY";
-//     if (gw.includes("CASHFREE")) return "CASHFREE";
-//     if (gw.includes("ADYEN")) return "ADYEN";
-//   }
-
-//   // Check intent for gateway identification
-//   if (response.intent) {
-//     try {
-//       const intent =
-//         typeof response.intent === "string"
-//           ? JSON.parse(response.intent)
-//           : response.intent;
-
-//       // Razorpay: has 'key' starting with rzp_test
-//       if (intent.key && intent.key.startsWith("rzp_test")) return "RAZORPAY";
-
-//       // Cashfree: has paymentSessionId AND appId starting with TEST
-//       if (
-//         intent.paymentSessionId ||
-//         (intent.appId && intent.appId.startsWith("TEST"))
-//       ) {
-//         return "CASHFREE";
-//       }
-
-//       // Adyen: has sessionId starting with CS
-//       if (intent.sessionId && intent.sessionId.startsWith("CS")) return "ADYEN";
-
-//       // Adyen: has pspReference
-//       if (intent.pspReference) return "ADYEN";
-
-//       // Adyen: has clientKey starting with test_
-//       if (intent.clientKey && intent.clientKey.startsWith("test_"))
-//         return "ADYEN";
-//     } catch (e) {}
-//   }
-
-//   return null;
-// }
-
-// /**
-//  * Get webhook payload for specific gateway with different statuses
-//  * @param {string} gateway - Gateway name
-//  * @param {string} merchantReference - Merchant reference
-//  * @param {number} amount - Payment amount
-//  * @param {string} paymentMode - Payment mode
-//  * @param {object} customer - Customer details
-//  * @param {object} intentData - Parsed intent data from pay-in response
-//  * @param {string} status - Payment status ('SUCCESS', 'FAILED', 'PENDING')
-//  */
-// function getWebhookPayload(
-//   gateway,
-//   merchantReference,
-//   amount,
-//   paymentMode,
-//   customer,
-//   intentData = {},
-//   status = "SUCCESS",
-// ) {
-//   const amountInPaise = Math.round(amount * 100);
-
-//   switch (gateway) {
-//     case "RAZORPAY": {
-//       const orderId =
-//         intentData.order_id ||
-//         `order_${Math.random().toString(36).substr(2, 10)}`;
-//       const paymentId = `pay_${Math.random().toString(36).substr(2, 10)}`;
-
-//       // Base payload structure
-//       const basePayload = {
-//         payload: {
-//           payment: {
-//             entity: {
-//               id: paymentId,
-//               entity: "payment",
-//               amount: amountInPaise,
-//               currency: "INR",
-//               order_id: orderId,
-//               invoice_id: null,
-//               international: false,
-//               method: paymentMode.toLowerCase(),
-//               amount_refunded: 0,
-//               refund_status: null,
-//               captured: status === "SUCCESS",
-//               description: `Payment for ${merchantReference}`,
-//               card_id: null,
-//               bank: "HDFC Bank",
-//               wallet: null,
-//               vpa: null,
-//               email: customer.email,
-//               contact: customer.phone.replace(/[^0-9]/g, ""),
-//               notes: {
-//                 customerName: customer.name,
-//                 customerEmail: customer.email,
-//                 customerPhone: customer.phone,
-//                 merchantReference: merchantReference,
-//               },
-//               fee: 0,
-//               tax: 0,
-//               acquirer_data: {
-//                 rrn: Math.random().toString().substr(2, 12),
-//               },
-//               created_at: Math.floor(Date.now() / 1000),
-//             },
-//           },
-//           order: {
-//             entity: {
-//               id: orderId,
-//               entity: "order",
-//               amount: amountInPaise,
-//               amount_paid: status === "SUCCESS" ? amountInPaise : 0,
-//               amount_due: status === "SUCCESS" ? 0 : amountInPaise,
-//               currency: "INR",
-//               receipt: merchantReference,
-//               offer_id: null,
-//               attempts: 1,
-//               notes: {
-//                 customerName: customer.name,
-//                 customerEmail: customer.email,
-//                 customerPhone: customer.phone,
-//                 merchantReference: merchantReference,
-//               },
-//               created_at: Math.floor(Date.now() / 1000) - 60,
-//             },
-//           },
-//         },
-//         created_at: Math.floor(Date.now() / 1000),
-//       };
-
-//       // Customize based on status
-//       switch (status) {
-//         case "SUCCESS":
-//           basePayload.event = "payment.captured";
-//           basePayload.payload.payment.entity.status = "captured";
-//           basePayload.payload.order.entity.status = "paid";
-//           break;
-
-//         case "FAILED":
-//           basePayload.event = "payment.failed";
-//           basePayload.payload.payment.entity.status = "failed";
-//           basePayload.payload.payment.entity.error_code = "PAYMENT_FAILED";
-//           basePayload.payload.payment.entity.error_description =
-//             "Payment failed due to insufficient funds";
-//           basePayload.payload.payment.entity.error_source = "bank";
-//           basePayload.payload.payment.entity.error_step =
-//             "payment_authorization";
-//           basePayload.payload.payment.entity.error_reason =
-//             "insufficient_funds";
-//           basePayload.payload.order.entity.status = "attempted";
-//           break;
-
-//         case "PENDING":
-//           basePayload.event = "payment.pending";
-//           basePayload.payload.payment.entity.status = "pending";
-//           basePayload.payload.order.entity.status = "created";
-//           break;
-//       }
-
-//       return basePayload;
-//     }
-
-//     case "CASHFREE": {
-//       const orderId =
-//         intentData.orderId || `order_${merchantReference}_${Date.now()}`;
-//       const paymentId = `pay_${Math.random().toString(36).substr(2, 10)}`;
-
-//       // Map status to Cashfree statuses
-//       const cashfreeStatusMap = {
-//         SUCCESS: "SUCCESS",
-//         FAILED: "FAILED",
-//         PENDING: "PENDING",
-//       };
-
-//       const cfStatus = cashfreeStatusMap[status] || "SUCCESS";
-
-//       // Map status to event type
-//       const eventTypeMap = {
-//         SUCCESS: "PAYMENT_SUCCESS_WEBHOOK",
-//         FAILED: "PAYMENT_FAILED_WEBHOOK",
-//         PENDING: "PAYMENT_PENDING_WEBHOOK",
-//       };
-
-//       return {
-//         type: eventTypeMap[status] || "PAYMENT_SUCCESS_WEBHOOK",
-//         data: {
-//           order: {
-//             order_id: orderId,
-//             order_amount: amount,
-//             order_currency: "INR",
-//             order_status:
-//               cfStatus === "SUCCESS"
-//                 ? "PAID"
-//                 : cfStatus === "FAILED"
-//                   ? "FAILED"
-//                   : "ACTIVE",
-//             order_expiry_time: new Date(
-//               Date.now() + 7 * 24 * 60 * 60 * 1000,
-//             ).toISOString(),
-//             order_note: `Payment for ${merchantReference}`,
-//             created_at: new Date().toISOString(),
-//           },
-//           payment: {
-//             payment_id: paymentId,
-//             order_id: orderId,
-//             payment_amount: amount,
-//             payment_status: cfStatus,
-//             payment_method: paymentMode,
-//             payment_time: new Date().toISOString(),
-//             bank_reference:
-//               cfStatus === "SUCCESS"
-//                 ? Math.random().toString().substr(2, 12)
-//                 : null,
-//             utr:
-//               cfStatus === "SUCCESS"
-//                 ? Math.random().toString().substr(2, 12)
-//                 : null,
-//             acquirer_data:
-//               cfStatus === "SUCCESS"
-//                 ? {
-//                     rrn: Math.random().toString().substr(2, 12),
-//                   }
-//                 : null,
-//             customer_details: {
-//               customer_name: customer.name,
-//               customer_email: customer.email,
-//               customer_phone: customer.phone,
-//             },
-//             // Add failure reason for FAILED status
-//             ...(cfStatus === "FAILED" && {
-//               payment_message: "Transaction failed at bank end",
-//               failure_reason: "Insufficient balance",
-//             }),
-//           },
-//         },
-//       };
-//     }
-
-//     case "ADYEN": {
-//       const reference =
-//         intentData.reference || `${merchantReference}_${Date.now()}`;
-//       const sessionId = intentData.sessionId || null;
-
-//       // Map status to Adyen event codes
-//       const eventCodeMap = {
-//         SUCCESS: "AUTHORISATION",
-//         FAILED: "REFUSED",
-//         PENDING: "PENDING",
-//       };
-
-//       const reasonMap = {
-//         SUCCESS: "0000:Authorised",
-//         FAILED: "1000:Refused",
-//         PENDING: "0100:Pending",
-//       };
-
-//       return {
-//         live: "false",
-//         notificationItems: [
-//           {
-//             NotificationRequestItem: {
-//               additionalData: {
-//                 ...(status === "SUCCESS"
-//                   ? {
-//                       authCode: Math.random().toString().substr(2, 6),
-//                       avsResult: "0",
-//                       cvcResult: "0",
-//                       responseCode: "0000",
-//                       totalFraudScore: "0",
-//                     }
-//                   : {
-//                       responseCode: status === "FAILED" ? "1000" : "0100",
-//                       refusalReason:
-//                         status === "FAILED" ? "Insufficient Funds" : null,
-//                     }),
-//               },
-//               amount: {
-//                 currency: "INR",
-//                 value: amountInPaise,
-//               },
-//               eventCode: eventCodeMap[status] || "AUTHORISATION",
-//               eventDate: new Date().toISOString(),
-//               merchantAccountCode: "HlleoCOM",
-//               merchantReference: reference,
-//               paymentMethod: paymentMode.toLowerCase(),
-//               pspReference:
-//                 sessionId ||
-//                 `AYDEN_PSP_REF_${Math.random().toString(36).substr(2, 10)}`,
-//               reason: reasonMap[status] || "0000:Authorised",
-//               success: status === "SUCCESS" ? "true" : "false",
-//             },
-//           },
-//         ],
-//       };
-//     }
-
-//     default:
-//       return null;
-//   }
-// }
-
-// /**
-//  * Automatically trigger the appropriate webhook based on gateway and status
-//  * @param {object} payInResult - Pay-in result
-//  * @param {string} forceStatus - Force a specific status ('SUCCESS', 'FAILED', 'PENDING')
-//  */
-// async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
-//   const { request, response } = payInResult;
-//   const { merchantReference, paymentMode, customer } = request;
-//   const amount = parseFloat(response.amountToCredit) || request.amount;
-
-//   // Detect which gateway was used
-//   const gateway = detectGateway(response);
-
-//   if (!gateway) {
-//     logError(`❌ Could not detect gateway for ${merchantReference}`);
-//     return null;
-//   }
-
-//   // If PENDING, don't trigger webhook (payment is not complete)
-//   if (forceStatus === "PENDING") {
-//     logWarning(
-//       `⏳ Skipping webhook for PENDING transaction ${merchantReference}`,
-//     );
-//     return {
-//       gateway,
-//       status: "PENDING",
-//       webhookTriggered: false,
-//       reason: "Pending transactions do not trigger webhooks",
-//     };
-//   }
-
-//   const status = forceStatus || "SUCCESS";
-//   logInfo(
-//     `🔄 Triggering ${gateway} webhook (${status}) for ${merchantReference}...`,
-//   );
-
-//   // Parse intent to extract real IDs
-//   let intentData = null;
-//   if (response.intent) {
-//     try {
-//       intentData =
-//         typeof response.intent === "string"
-//           ? JSON.parse(response.intent)
-//           : response.intent;
-//     } catch (e) {}
-//   }
-
-//   // Get webhook payload with real intent data and status
-//   const webhookPayload = getWebhookPayload(
-//     gateway,
-//     merchantReference,
-//     amount,
-//     paymentMode,
-//     customer,
-//     intentData,
-//     status, // Pass status!
-//   );
-
-//   if (!webhookPayload) {
-//     logError(`❌ No webhook payload for ${gateway}`);
-//     return null;
-//   }
-
-//   // Get webhook URL
-//   const webhookUrls = {
-//     RAZORPAY: config.API_PATHS.WEBHOOKS.RAZORPAY,
-//     CASHFREE: config.API_PATHS.WEBHOOKS.CASHFREE,
-//     ADYEN: config.API_PATHS.WEBHOOKS.ADYEN,
-//   };
-
-//   const webhookUrl = `${config.BASE_URL}${webhookUrls[gateway]}`;
-
-//   try {
-//     const webhookResponse = await axios.post(webhookUrl, webhookPayload, {
-//       headers: { "Content-Type": "application/json" },
-//     });
-
-//     logSuccess(`✅ ${gateway} webhook (${status}) triggered successfully`);
-//     return { gateway, status, success: true, response: webhookResponse.data };
-//   } catch (error) {
-//     logError(`❌ ${gateway} webhook (${status}) failed: ${error.message}`);
-//     if (error.response) {
-//       logError(`Status: ${error.response.status}`);
-//       logError(`Response: ${JSON.stringify(error.response.data)}`);
-//     }
-//     return { gateway, status, success: false, error: error.message };
-//   }
-// }
-
-// module.exports = { triggerWebhookForPayIn, detectGateway, getWebhookPayload };
-
-
-
-
-
-
-
-
-
 // utils/webhook-trigger.js
 const axios = require('axios');
-const logger = require('./logger');
+const config = require('../config');
+const { logInfo, logSuccess, logError } = require('./logger');
 
-class WebhookTrigger {
-  constructor() {
-    this.activeWebhooks = new Map();
-    this.webhookQueue = [];
-    this.isProcessing = false;
+/**
+ * Detect which gateway was used based on response data
+ */
+function detectGateway(response) {
+  if (!response) return null;
+
+  // Check gatewayId FIRST (most reliable)
+  if (response.gatewayId) {
+    const gatewayMap = {
+      1: 'RAZORPAY',
+      2: 'CASHFREE',
+      3: 'ADYEN',
+      4: 'CHARGEBEE',
+      5: 'BENNUPAY'
+    };
+    return gatewayMap[response.gatewayId] || null;
   }
 
-  async triggerWebhookAsync(payload) {
-    const webhookId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    return new Promise((resolve) => {
-      // Add to queue
-      this.webhookQueue.push({
-        id: webhookId,
-        payload,
-        resolve,
-        timestamp: Date.now()
-      });
-      
-      // Process queue asynchronously
-      this.processQueue();
-    });
-  }
-
-  async processQueue() {
-    if (this.isProcessing || this.webhookQueue.length === 0) {
-      return;
-    }
-
-    this.isProcessing = true;
-
-    while (this.webhookQueue.length > 0) {
-      const webhookItem = this.webhookQueue.shift();
-      
-      // Process webhook in background
-      this.executeWebhook(webhookItem)
-        .then(result => {
-          webhookItem.resolve(result);
-        })
-        .catch(error => {
-          logger.error(`Webhook ${webhookItem.id} failed`, error);
-          webhookItem.resolve({ 
-            status: 'FAILED', 
-            error: error.message 
-          });
-        });
-    }
-
-    this.isProcessing = false;
-  }
-
-  async executeWebhook(webhookItem) {
-    const { payload } = webhookItem;
-    
+  // Check intent for gateway identification
+  if (response.intent) {
     try {
-      // Get webhook URL from merchant config
-      const webhookUrl = payload.merchantId === 1 ? 'https://github.com' : 
-                         payload.merchantId === 2 ? 'https://wehbook.com' : 
-                         'https://webhook.com';
-      
-      logger.info(`🌐 Triggering webhook for merchant ${payload.merchantId}`);
-      
-      // Send webhook without waiting for response
-      const response = await axios.post(webhookUrl, {
-        event: 'PAYIN_COMPLETED',
-        timestamp: new Date().toISOString(),
-        data: payload,
-        webhookId: webhookItem.id
-      }, {
-        timeout: 5000, // 5 second timeout
-        validateStatus: () => true // Don't throw on any status
-      });
+      const intent = typeof response.intent === 'string'
+        ? JSON.parse(response.intent)
+        : response.intent;
 
-      return {
-        status: 'SENT',
-        response: response.data,
-        statusCode: response.status
-      };
+      // Razorpay: has 'key' starting with rzp_test
+      if (intent.key && intent.key.startsWith('rzp_test')) {
+        return 'RAZORPAY';
+      }
 
-    } catch (error) {
-      return {
-        status: 'FAILED',
-        error: error.message
-      };
+      // Cashfree: has paymentSessionId
+      if (intent.paymentSessionId) {
+        return 'CASHFREE';
+      }
+
+      // Adyen: has pspReference or sessionId starting with CS
+      if (intent.pspReference || (intent.sessionId && intent.sessionId.startsWith('CS'))) {
+        return 'ADYEN';
+      }
+
+      // ChargeBee: Check for ChargeBee specific fields
+      if (intent.chargebee_id || intent.cb_token || intent.chargebee_session) {
+        return 'CHARGEBEE';
+      }
+
+      // Bennupay: Check for Bennupay specific fields
+      if (intent.bennupay_token || intent.bp_session || intent.bennupay_id) {
+        return 'BENNUPAY';
+      }
+    } catch (e) {
+      // Ignore parse errors
     }
   }
 
-  // Method to check webhook status
-  getWebhookStatus(webhookId) {
-    return this.activeWebhooks.get(webhookId) || null;
+  // Check gatewayName field
+  if (response.gatewayName) {
+    const name = response.gatewayName.toUpperCase();
+    if (name.includes('RAZORPAY')) return 'RAZORPAY';
+    if (name.includes('CASHFREE')) return 'CASHFREE';
+    if (name.includes('ADYEN')) return 'ADYEN';
+    if (name.includes('CHARGEBEE')) return 'CHARGEBEE';    // ← ADD
+    if (name.includes('BENNUPAY')) return 'BENNUPAY';      // ← ADD
+  }
+
+  return null;
+}
+
+/**
+ * Get webhook payload for specific gateway
+ */
+function getWebhookPayload(gateway, merchantReference, amount, paymentMode, customer, status = 'SUCCESS') {
+  const amountInPaise = Math.round(amount * 100);
+
+  switch (gateway) {
+    case 'RAZORPAY':
+      return {
+        event: 'payment.captured',
+        payload: {
+          payment: {
+            entity: {
+              id: `pay_${Math.random().toString(36).substr(2, 10)}`,
+              entity: 'payment',
+              amount: amountInPaise,
+              currency: 'INR',
+              status: 'captured',
+              order_id: `order_${Math.random().toString(36).substr(2, 10)}`,
+              method: paymentMode.toLowerCase(),
+              captured: true,
+              email: customer.email,
+              contact: customer.phone.replace(/[^0-9]/g, ''),
+              notes: {
+                merchantReference: merchantReference
+              },
+              created_at: Math.floor(Date.now() / 1000)
+            }
+          },
+          order: {
+            entity: {
+              id: `order_${Math.random().toString(36).substr(2, 10)}`,
+              entity: 'order',
+              amount: amountInPaise,
+              amount_paid: amountInPaise,
+              amount_due: 0,
+              currency: 'INR',
+              receipt: merchantReference,
+              status: 'paid',
+              attempts: 1,
+              created_at: Math.floor(Date.now() / 1000) - 60
+            }
+          }
+        },
+        created_at: Math.floor(Date.now() / 1000)
+      };
+
+    case 'CASHFREE':
+      return {
+        type: 'PAYMENT_SUCCESS_WEBHOOK',
+        data: {
+          order: {
+            order_id: merchantReference,
+            order_amount: amount,
+            order_currency: 'INR',
+            order_status: 'PAID',
+            created_at: new Date().toISOString()
+          },
+          payment: {
+            payment_id: `pay_${Math.random().toString(36).substr(2, 10)}`,
+            order_id: merchantReference,
+            payment_amount: amount,
+            payment_status: 'SUCCESS',
+            payment_method: paymentMode,
+            payment_time: new Date().toISOString(),
+            customer_details: {
+              customer_name: customer.name,
+              customer_email: customer.email,
+              customer_phone: customer.phone
+            }
+          }
+        }
+      };
+
+    case 'ADYEN':
+      return {
+        live: 'false',
+        notificationItems: [{
+          NotificationRequestItem: {
+            amount: {
+              currency: 'INR',
+              value: amountInPaise
+            },
+            eventCode: 'AUTHORISATION',
+            eventDate: new Date().toISOString(),
+            merchantAccountCode: 'HlleoCOM',
+            merchantReference: merchantReference,
+            paymentMethod: paymentMode.toLowerCase(),
+            pspReference: `AYDEN_PSP_REF_${Math.random().toString(36).substr(2, 10)}`,
+            reason: '0000:Authorised',
+            success: 'true'
+          }
+        }]
+      };
+
+    case 'CHARGEBEE':  // ← ADD THIS CASE
+      return {
+        event: 'payment_success',
+        customer: {
+          email: customer.email,
+          name: customer.name,
+          phone: customer.phone
+        },
+        transaction: {
+          id: `ch_${Math.random().toString(36).substr(2, 10)}`,
+          amount: amount,
+          currency: 'INR',
+          status: 'success',
+          reference_id: merchantReference,
+          payment_method: paymentMode.toLowerCase()
+        },
+        created_at: new Date().toISOString()
+      };
+
+    case 'BENNUPAY':  // ← ADD THIS CASE
+      return {
+        event: 'payment.completed',
+        data: {
+          transaction_id: `bp_${Math.random().toString(36).substr(2, 10)}`,
+          merchant_reference: merchantReference,
+          amount: amount,
+          currency: 'INR',
+          status: 'SUCCESS',
+          payment_mode: paymentMode,
+          customer: {
+            name: customer.name,
+            email: customer.email,
+            phone: customer.phone
+          },
+          timestamp: new Date().toISOString()
+        }
+      };
+
+    default:
+      return null;
   }
 }
 
-module.exports = new WebhookTrigger();
+/**
+ * Trigger webhook for a pay-in
+ */
+async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
+  const { request, response } = payInResult;
+  const { merchantReference, paymentMode, customer } = request;
+  const amount = parseFloat(response.amountToCredit) || request.amount;
+
+  // Detect gateway
+  const gateway = detectGateway(response);
+
+  if (!gateway) {
+    logError(`❌ Could not detect gateway for ${merchantReference}`);
+    return null;
+  }
+
+  logInfo(`🔄 Triggering ${gateway} webhook for ${merchantReference}...`);
+
+  // Get webhook payload
+  const webhookPayload = getWebhookPayload(
+    gateway,
+    merchantReference,
+    amount,
+    paymentMode,
+    customer,
+    forceStatus || 'SUCCESS'
+  );
+
+  if (!webhookPayload) {
+    logError(`❌ No webhook payload for ${gateway}`);
+    return null;
+  }
+
+  // Get webhook URL
+  const webhookUrls = {
+    RAZORPAY: config.API_PATHS.WEBHOOKS.RAZORPAY,
+    CASHFREE: config.API_PATHS.WEBHOOKS.CASHFREE,
+    ADYEN: config.API_PATHS.WEBHOOKS.ADYEN,
+    CHARGEBEE: '/api/webhooks/chargebee',      // ← ADD
+    BENNUPAY: '/api/webhooks/bennupay'         // ← ADD
+  };
+
+  const webhookUrl = `${config.BASE_URL}${webhookUrls[gateway]}`;
+
+  logInfo(`📨 Sending webhook to: ${webhookUrl}`);
+
+  try {
+    const webhookResponse = await axios.post(webhookUrl, webhookPayload, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 5000
+    });
+
+    logSuccess(`✅ ${gateway} webhook triggered successfully`);
+    logInfo(`📊 Response: ${JSON.stringify(webhookResponse.data)}`);
+
+    return {
+      gateway,
+      status: 'SUCCESS',
+      success: true,
+      response: webhookResponse.data
+    };
+  } catch (error) {
+    logError(`❌ Webhook failed: ${error.message}`);
+    if (error.response) {
+      logError(`Status: ${error.response.status}`);
+      logError(`Response: ${JSON.stringify(error.response.data)}`);
+    }
+    return {
+      gateway,
+      status: 'FAILED',
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+module.exports = { triggerWebhookForPayIn, detectGateway, getWebhookPayload };
 
 ==================== C:\Users\DELL\Desktop\Automation\src\validators\response.js ====================
 const { logger, logSuccess, logError, logInfo, logWarning } = require('../utils/logger');
+
+// Gateway mapping for consistent reference
+const GATEWAY_MAP = {
+  1: { id: 1, name: 'Razorpay', keyPatterns: ['rzp_test'] },
+  2: { id: 2, name: 'Cashfree', keyPatterns: ['cashfree', 'cf_'] },
+  3: { id: 3, name: 'Adyen', keyPatterns: ['adyen'] },
+  4: { id: 4, name: 'ChargeBee', keyPatterns: ['chargebee', 'cb_', 'ch_'] },
+  5: { id: 5, name: 'Bennupay', keyPatterns: ['bennupay', 'bp_'] }
+};
+
+/**
+ * Detect gateway ID from response
+ * @param {object} response - Pay-in response
+ * @returns {number|null} - Gateway ID or null if not detected
+ */
+function detectGatewayId(response) {
+  if (!response) return null;
+
+  // 1. Check gatewayId field (most reliable)
+  if (response.gatewayId) {
+    const id = parseInt(response.gatewayId);
+    if (GATEWAY_MAP[id]) {
+      return id;
+    }
+  }
+
+  // 2. Check intent field
+  if (response.intent) {
+    try {
+      const intent = typeof response.intent === 'string'
+        ? JSON.parse(response.intent)
+        : response.intent;
+
+      // Check for gateway-specific fields in intent
+      if (intent.key) {
+        const key = intent.key;
+
+        // Razorpay: key starts with rzp_test
+        if (key.startsWith('rzp_test')) {
+          return 1;
+        }
+
+        // Check against all gateway patterns
+        for (const [id, gateway] of Object.entries(GATEWAY_MAP)) {
+          for (const pattern of gateway.keyPatterns) {
+            if (key.includes(pattern)) {
+              return parseInt(id);
+            }
+          }
+        }
+      }
+
+      // ChargeBee specific fields
+      if (intent.chargebee_id || intent.cb_token || intent.chargebee_session) {
+        return 4;
+      }
+
+      // Bennupay specific fields
+      if (intent.bennupay_token || intent.bp_session || intent.bennupay_id) {
+        return 5;
+      }
+
+      // Cashfree specific fields
+      if (intent.paymentSessionId) {
+        return 2;
+      }
+
+      // Adyen specific fields
+      if (intent.pspReference || (intent.sessionId && intent.sessionId.startsWith('CS'))) {
+        return 3;
+      }
+
+    } catch (e) {
+      // Ignore parse errors
+    }
+  }
+
+  // 3. Check gatewayName field
+  if (response.gatewayName) {
+    const name = response.gatewayName.toUpperCase();
+    for (const [id, gateway] of Object.entries(GATEWAY_MAP)) {
+      if (name.includes(gateway.name.toUpperCase())) {
+        return parseInt(id);
+      }
+    }
+  }
+
+  // 4. Check paymentGateway field
+  if (response.paymentGateway) {
+    const name = response.paymentGateway.toUpperCase();
+    for (const [id, gateway] of Object.entries(GATEWAY_MAP)) {
+      if (name.includes(gateway.name.toUpperCase())) {
+        return parseInt(id);
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Get gateway name from ID
+ * @param {number} gatewayId - Gateway ID
+ * @returns {string} - Gateway name or 'Unknown'
+ */
+function getGatewayName(gatewayId) {
+  return GATEWAY_MAP[gatewayId]?.name || `Unknown (${gatewayId})`;
+}
 
 /**
  * Validate pay-in response
@@ -2650,7 +3223,9 @@ function validatePayInResponse(response, request, expectedGatewayId) {
   const result = {
     valid: true,
     errors: [],
-    warnings: []
+    warnings: [],
+    detectedGatewayId: null,
+    detectedGatewayName: null
   };
 
   // Check required fields
@@ -2673,21 +3248,24 @@ function validatePayInResponse(response, request, expectedGatewayId) {
     result.warnings.push(`Amount mismatch: Expected ${request.amount}, Got ${response.amount}`);
   }
 
+  // Detect gateway
+  const detectedId = detectGatewayId(response);
+  result.detectedGatewayId = detectedId;
+  result.detectedGatewayName = detectedId ? getGatewayName(detectedId) : 'Unknown';
+
   // Check if gateway routing is correct
-  // Note: Gateway ID is not directly in response, we need to check intent or other fields
-  if (response.intent) {
-    try {
-      const intent = JSON.parse(response.intent);
-      if (intent.key) {
-        // Razorpay key indicates Razorpay gateway
-        const actualGateway = intent.key.startsWith('rzp_test') ? 1 : null;
-        if (actualGateway && actualGateway !== expectedGatewayId) {
-          result.warnings.push(`Gateway mismatch: Expected ${expectedGatewayId}, Got ${actualGateway}`);
-        }
-      }
-    } catch (e) {
-      // Ignore parse errors
+  if (detectedId && expectedGatewayId) {
+    if (detectedId !== expectedGatewayId) {
+      result.valid = false;
+      result.errors.push(
+        `Gateway mismatch: Expected ${getGatewayName(expectedGatewayId)} (ID: ${expectedGatewayId}), ` +
+        `Got ${getGatewayName(detectedId)} (ID: ${detectedId})`
+      );
+    } else {
+      result.warnings.push(`✅ Gateway correct: ${getGatewayName(detectedId)}`);
     }
+  } else if (!detectedId && expectedGatewayId) {
+    result.warnings.push(`Could not detect gateway, expected ${getGatewayName(expectedGatewayId)}`);
   }
 
   return result;
@@ -2721,6 +3299,12 @@ function validateWebhookResponse(response) {
     result.errors.push('Webhook processing failed');
   }
 
+  // Check for gateway-specific webhook response
+  if (response.message && response.message.includes('error')) {
+    result.valid = false;
+    result.errors.push(response.message);
+  }
+
   return result;
 }
 
@@ -2731,37 +3315,46 @@ function validateWebhookResponse(response) {
  * @returns {boolean}
  */
 function isRoutingCorrect(response, expectedGatewayId) {
-  // Try to extract gateway from response
-  let actualGatewayId = null;
-  
-  if (response.intent) {
-    try {
-      const intent = JSON.parse(response.intent);
-      if (intent.key) {
-        if (intent.key.startsWith('rzp_test')) {
-          actualGatewayId = 1; // Razorpay
-        } else if (intent.key.includes('cashfree')) {
-          actualGatewayId = 2; // Cashfree
-        } else if (intent.key.includes('adyen')) {
-          actualGatewayId = 3; // Adyen
-        }
-      }
-    } catch (e) {
-      // Ignore
-    }
-  }
+  const detectedId = detectGatewayId(response);
 
   // If we can't determine actual gateway, assume correct
-  if (actualGatewayId === null) {
+  if (detectedId === null) {
     return true;
   }
 
-  return actualGatewayId === expectedGatewayId;
+  return detectedId === expectedGatewayId;
+}
+
+/**
+ * Get detailed routing info
+ * @param {object} response - Pay-in response
+ * @param {number} expectedGatewayId - Expected gateway ID
+ * @returns {object}
+ */
+function getRoutingInfo(response, expectedGatewayId) {
+  const detectedId = detectGatewayId(response);
+
+  return {
+    expectedGatewayId,
+    expectedGatewayName: expectedGatewayId ? getGatewayName(expectedGatewayId) : 'Not specified',
+    detectedGatewayId: detectedId,
+    detectedGatewayName: detectedId ? getGatewayName(detectedId) : 'Unknown',
+    isCorrect: detectedId ? detectedId === expectedGatewayId : null,
+    message: detectedId
+      ? (detectedId === expectedGatewayId
+        ? `✅ Correct gateway: ${getGatewayName(detectedId)}`
+        : `❌ Gateway mismatch: Expected ${getGatewayName(expectedGatewayId)}, Got ${getGatewayName(detectedId)}`)
+      : '⚠️ Could not detect gateway'
+  };
 }
 
 module.exports = {
   validatePayInResponse,
   validateWebhookResponse,
-  isRoutingCorrect
+  isRoutingCorrect,
+  detectGatewayId,
+  getGatewayName,
+  getRoutingInfo,
+  GATEWAY_MAP
 };
 
