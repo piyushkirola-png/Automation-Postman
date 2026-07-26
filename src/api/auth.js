@@ -1,6 +1,6 @@
-const axios = require('axios');
-const config = require('../config');
-const { logger, logSuccess, logError, logInfo } = require('../utils/logger');
+const axios = require("axios");
+const config = require("../config");
+const { logger, logSuccess, logError, logInfo } = require("../utils/logger");
 
 /**
  * Login user and get access token + client secret
@@ -12,22 +12,22 @@ async function loginUser(email, password) {
   try {
     const url = `${config.BASE_URL}${config.API_PATHS.LOGIN}`;
     const payload = { email, password };
-    
+
     logInfo(`Logging in: ${email}`);
-    
+
     const response = await axios.post(url, payload, {
       headers: {
-        'Content-Type': 'application/json'
-      }
+        "Content-Type": "application/json",
+      },
     });
-    
+
     if (response.data.success) {
       const { accessToken, user } = response.data.data;
       const clientSecret = user.clientSecret;
-      
+
       logSuccess(`Login successful for ${email}`);
       logInfo(`Merchant ID: ${user.merchantId}`);
-      
+
       return {
         accessToken,
         clientSecret,
@@ -36,11 +36,11 @@ async function loginUser(email, password) {
           email: user.email,
           fullName: user.fullName,
           role: user.role,
-          merchantId: user.merchantId
-        }
+          merchantId: user.merchantId,
+        },
       };
     } else {
-      throw new Error(response.data.message || 'Login failed');
+      throw new Error(response.data.message || "Login failed");
     }
   } catch (error) {
     logError(`Login failed for ${email}: ${error.message}`);

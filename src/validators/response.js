@@ -1,14 +1,20 @@
 // src/validators/response.js
 
-const { logger, logSuccess, logError, logInfo, logWarning } = require('../utils/logger');
+const {
+  logger,
+  logSuccess,
+  logError,
+  logInfo,
+  logWarning,
+} = require("../utils/logger");
 
 // Gateway mapping for consistent reference
 const GATEWAY_MAP = {
-  1: { id: 1, name: 'Razorpay', keyPatterns: ['rzp_test'] },
-  2: { id: 2, name: 'Cashfree', keyPatterns: ['cashfree', 'cf_'] },
-  3: { id: 3, name: 'Adyen', keyPatterns: ['adyen'] },
-  4: { id: 4, name: 'ChargeBee', keyPatterns: ['chargebee', 'cb_', 'ch_'] },
-  5: { id: 5, name: 'Bennupay', keyPatterns: ['bennupay', 'bp_'] }
+  1: { id: 1, name: "Razorpay", keyPatterns: ["rzp_test"] },
+  2: { id: 2, name: "Cashfree", keyPatterns: ["cashfree", "cf_"] },
+  3: { id: 3, name: "Adyen", keyPatterns: ["adyen"] },
+  4: { id: 4, name: "ChargeBee", keyPatterns: ["chargebee", "cb_", "ch_"] },
+  5: { id: 5, name: "Bennupay", keyPatterns: ["bennupay", "bp_"] },
 };
 
 /**
@@ -31,30 +37,36 @@ function detectGatewayId(response) {
   if (response.intent) {
     try {
       // 🔥 FIX: Check if intent is a URL string first
-      const intentString = typeof response.intent === 'string'
-        ? response.intent
-        : JSON.stringify(response.intent);
+      const intentString =
+        typeof response.intent === "string"
+          ? response.intent
+          : JSON.stringify(response.intent);
 
       // 🔥 CHARGEBEE DETECTION: URL contains chargebee.com
-      if (intentString.includes('chargebee.com') ||
-        intentString.includes('chargebee') ||
-        intentString.includes('invoice_id=')) {
+      if (
+        intentString.includes("chargebee.com") ||
+        intentString.includes("chargebee") ||
+        intentString.includes("invoice_id=")
+      ) {
         return 4; // ChargeBee ID
       }
 
       // 🔥 BENNUPAY DETECTION: Check for Bennupay patterns
-      if (intentString.includes('bennupay') ||
-        intentString.includes('bp_') ||
-        intentString.includes('mock_')) {
+      if (
+        intentString.includes("bennupay") ||
+        intentString.includes("bp_") ||
+        intentString.includes("mock_")
+      ) {
         return 5; // Bennupay ID
       }
 
       // Try to parse as JSON for other gateways
       let parsedIntent = null;
       try {
-        parsedIntent = typeof response.intent === 'string'
-          ? JSON.parse(response.intent)
-          : response.intent;
+        parsedIntent =
+          typeof response.intent === "string"
+            ? JSON.parse(response.intent)
+            : response.intent;
       } catch (e) {
         // Not JSON, continue with string checks
       }
@@ -65,7 +77,7 @@ function detectGatewayId(response) {
           const key = parsedIntent.key;
 
           // Razorpay: key starts with rzp_test
-          if (key.startsWith('rzp_test')) {
+          if (key.startsWith("rzp_test")) {
             return 1;
           }
 
@@ -80,16 +92,20 @@ function detectGatewayId(response) {
         }
 
         // ChargeBee specific fields
-        if (parsedIntent.chargebee_id ||
+        if (
+          parsedIntent.chargebee_id ||
           parsedIntent.cb_token ||
-          parsedIntent.chargebee_session) {
+          parsedIntent.chargebee_session
+        ) {
           return 4;
         }
 
         // Bennupay specific fields
-        if (parsedIntent.bennupay_token ||
+        if (
+          parsedIntent.bennupay_token ||
           parsedIntent.bp_session ||
-          parsedIntent.bennupay_id) {
+          parsedIntent.bennupay_id
+        ) {
           return 5;
         }
 
@@ -99,8 +115,10 @@ function detectGatewayId(response) {
         }
 
         // Adyen specific fields
-        if (parsedIntent.pspReference ||
-          (parsedIntent.sessionId && parsedIntent.sessionId.startsWith('CS'))) {
+        if (
+          parsedIntent.pspReference ||
+          (parsedIntent.sessionId && parsedIntent.sessionId.startsWith("CS"))
+        ) {
           return 3;
         }
       }
@@ -154,33 +172,39 @@ function validatePayInResponse(response, request, expectedGatewayId) {
     errors: [],
     warnings: [],
     detectedGatewayId: null,
-    detectedGatewayName: null
+    detectedGatewayName: null,
   };
 
   // Check required fields
   if (!response.id) {
     result.valid = false;
-    result.errors.push('Missing transaction ID');
+    result.errors.push("Missing transaction ID");
   }
 
   if (!response.status) {
     result.valid = false;
-    result.errors.push('Missing status');
+    result.errors.push("Missing status");
   }
 
   if (response.merchantReference !== request.merchantReference) {
     result.valid = false;
-    result.errors.push(`Merchant reference mismatch: Expected ${request.merchantReference}, Got ${response.merchantReference}`);
+    result.errors.push(
+      `Merchant reference mismatch: Expected ${request.merchantReference}, Got ${response.merchantReference}`,
+    );
   }
 
   if (parseFloat(response.amount) !== request.amount) {
-    result.warnings.push(`Amount mismatch: Expected ${request.amount}, Got ${response.amount}`);
+    result.warnings.push(
+      `Amount mismatch: Expected ${request.amount}, Got ${response.amount}`,
+    );
   }
 
   // Detect gateway
   const detectedId = detectGatewayId(response);
   result.detectedGatewayId = detectedId;
-  result.detectedGatewayName = detectedId ? getGatewayName(detectedId) : 'Unknown';
+  result.detectedGatewayName = detectedId
+    ? getGatewayName(detectedId)
+    : "Unknown";
 
   // Check if gateway routing is correct
   if (detectedId && expectedGatewayId) {
@@ -188,13 +212,15 @@ function validatePayInResponse(response, request, expectedGatewayId) {
       result.valid = false;
       result.errors.push(
         `Gateway mismatch: Expected ${getGatewayName(expectedGatewayId)} (ID: ${expectedGatewayId}), ` +
-        `Got ${getGatewayName(detectedId)} (ID: ${detectedId})`
+          `Got ${getGatewayName(detectedId)} (ID: ${detectedId})`,
       );
     } else {
       result.warnings.push(`✅ Gateway correct: ${getGatewayName(detectedId)}`);
     }
   } else if (!detectedId && expectedGatewayId) {
-    result.warnings.push(`Could not detect gateway, expected ${getGatewayName(expectedGatewayId)}`);
+    result.warnings.push(
+      `Could not detect gateway, expected ${getGatewayName(expectedGatewayId)}`,
+    );
   }
 
   return result;
@@ -208,12 +234,12 @@ function validatePayInResponse(response, request, expectedGatewayId) {
 function validateWebhookResponse(response) {
   const result = {
     valid: true,
-    errors: []
+    errors: [],
   };
 
-  if (!response || typeof response !== 'object') {
+  if (!response || typeof response !== "object") {
     result.valid = false;
-    result.errors.push('Invalid webhook response');
+    result.errors.push("Invalid webhook response");
     return result;
   }
 
@@ -225,11 +251,11 @@ function validateWebhookResponse(response) {
 
   if (response.success === false) {
     result.valid = false;
-    result.errors.push('Webhook processing failed');
+    result.errors.push("Webhook processing failed");
   }
 
   // Check for gateway-specific webhook response
-  if (response.message && response.message.includes('error')) {
+  if (response.message && response.message.includes("error")) {
     result.valid = false;
     result.errors.push(response.message);
   }
@@ -265,15 +291,17 @@ function getRoutingInfo(response, expectedGatewayId) {
 
   return {
     expectedGatewayId,
-    expectedGatewayName: expectedGatewayId ? getGatewayName(expectedGatewayId) : 'Not specified',
+    expectedGatewayName: expectedGatewayId
+      ? getGatewayName(expectedGatewayId)
+      : "Not specified",
     detectedGatewayId: detectedId,
-    detectedGatewayName: detectedId ? getGatewayName(detectedId) : 'Unknown',
+    detectedGatewayName: detectedId ? getGatewayName(detectedId) : "Unknown",
     isCorrect: detectedId ? detectedId === expectedGatewayId : null,
     message: detectedId
-      ? (detectedId === expectedGatewayId
+      ? detectedId === expectedGatewayId
         ? `✅ Correct gateway: ${getGatewayName(detectedId)}`
-        : `❌ Gateway mismatch: Expected ${getGatewayName(expectedGatewayId)}, Got ${getGatewayName(detectedId)}`)
-      : '⚠️ Could not detect gateway'
+        : `❌ Gateway mismatch: Expected ${getGatewayName(expectedGatewayId)}, Got ${getGatewayName(detectedId)}`
+      : "⚠️ Could not detect gateway",
   };
 }
 
@@ -284,5 +312,5 @@ module.exports = {
   detectGatewayId,
   getGatewayName,
   getRoutingInfo,
-  GATEWAY_MAP
+  GATEWAY_MAP,
 };

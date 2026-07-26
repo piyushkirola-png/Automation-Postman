@@ -5,8 +5,10 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
+    "format": "npx prettier --write \"src/**/*.js\"",
     "test": "node src/index.js",
     "test:unified": "node -e \"require('./src/tests/10-unified-routing-test').testUnifiedRouting().then(() => process.exit(0)).catch(() => process.exit(1))\"",
+    "test:routes": "node -e \"require('./src/tests/11-stripe-payu-routing').testStripePayuRouting().then(() => process.exit(0)).catch(() => process.exit(1))\"",
     "test:priority": "node -e \"require('./src/tests/01-priority-routing').testPriorityRouting()\"",
     "test:failover": "node -e \"require('./src/tests/02-failover-routing').testFailoverRouting()\"",
     "test:hybrid": "node -e \"require('./src/tests/03-hybrid-routing').testHybridRouting()\"",
@@ -23,6 +25,7 @@
     "bcrypt": "^6.0.0",
     "crypto": "^1.0.1",
     "dotenv": "^16.6.1",
+    "express": "^5.2.1",
     "pg": "^8.22.0",
     "winston": "^3.11.0"
   },

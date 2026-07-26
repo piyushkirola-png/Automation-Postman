@@ -73,7 +73,7 @@ async function testPriorityRouting() {
             customer,
             merchantReference,
           });
-          const webhookResult = await triggerWebhookForPayIn(result, 'SUCCESS');
+          const webhookResult = await triggerWebhookForPayIn(result, "SUCCESS");
 
           const isCorrect = isRoutingCorrect(
             result.response,

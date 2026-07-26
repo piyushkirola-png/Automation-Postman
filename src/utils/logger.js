@@ -1,28 +1,28 @@
-const winston = require('winston');
-const fs = require('fs');
-const path = require('path');
+const winston = require("winston");
+const fs = require("fs");
+const path = require("path");
 
 // Create reports directory if it doesn't exist
-const reportsDir = path.join(__dirname, '../../reports');
+const reportsDir = path.join(__dirname, "../../reports");
 if (!fs.existsSync(reportsDir)) {
   fs.mkdirSync(reportsDir, { recursive: true });
 }
 
 const logger = winston.createLogger({
-  level: 'info',
+  level: "info",
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.colorize(),
     winston.format.printf(({ timestamp, level, message }) => {
       return `${timestamp} [${level}]: ${message}`;
-    })
+    }),
   ),
   transports: [
     new winston.transports.Console(),
     new winston.transports.File({
-      filename: path.join(reportsDir, 'automation.log')
-    })
-  ]
+      filename: path.join(reportsDir, "automation.log"),
+    }),
+  ],
 });
 
 function logSuccess(message) {
@@ -42,9 +42,9 @@ function logInfo(message) {
 }
 
 function logSection(title) {
-  console.log('\n' + '='.repeat(60));
+  console.log("\n" + "=".repeat(60));
   console.log(`📋 ${title}`);
-  console.log('='.repeat(60));
+  console.log("=".repeat(60));
 }
 
 module.exports = {
@@ -53,5 +53,5 @@ module.exports = {
   logError,
   logWarning,
   logInfo,
-  logSection
+  logSection,
 };

@@ -64,7 +64,7 @@ async function testMDRCalculation() {
           merchantReference,
         });
         // ✅ AUTO-TRIGGER WEBHOOK
-        await triggerWebhookForPayIn(result, 'SUCCESS');
+        await triggerWebhookForPayIn(result, "SUCCESS");
 
         const actualFee = parseFloat(result.response.feeAmount) || 0;
         const amountToCredit = parseFloat(result.response.amountToCredit) || 0;

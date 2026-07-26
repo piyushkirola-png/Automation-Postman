@@ -7,8 +7,8 @@ const pool = new Pool({
   host: process.env.DB_HOST || "localhost",
   port: parseInt(process.env.DB_PORT) || 5432,
   user: process.env.DB_USER || "postgres",
-  password: process.env.DB_PASSWORD || "",
-  database: process.env.DB_NAME || "yourdbname",
+  password: process.env.DB_PASSWORD || "12345",
+  database: process.env.DB_NAME || "",
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
@@ -24,9 +24,14 @@ pool.on("error", (err) => {
 });
 
 /**
- * Get routing configuration for merchants 1-10
+ * Get routing configuration for specific merchants
+ * @param {number[]} merchantIds - Array of merchant IDs (default: 1-10)
  */
-async function getRoutingConfig() {
+async function getRoutingConfig(merchantIds = null) {
+  // If no merchantIds provided, default to 1-10
+  const ids = merchantIds || [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
+
   const query = `
     SELECT 
       mp.id AS "merchantId",
@@ -46,14 +51,14 @@ async function getRoutingConfig() {
       ON mrp.id = mgp."merchantRoutingPrefId"
     JOIN gateways g
       ON mgp."gatewayId" = g.id
-    WHERE mp.id BETWEEN 1 AND 10
+    WHERE mp.id IN (${placeholders})
       AND mp."isActive" = true
       AND mgp."isActive" = true
     ORDER BY mp.id, mgp.priority
   `;
 
   try {
-    const result = await pool.query(query);
+    const result = await pool.query(query, ids);
     return result.rows;
   } catch (error) {
     console.error("❌ Error fetching routing config:", error);

@@ -1,56 +1,130 @@
-const axios = require('axios');
-const config = require('../config');
-const { generateSignature, generateMerchantReference } = require('../utils/crypto');
-const { randomCustomer, randomAmount, randomPaymentMode } = require('../utils/random');
-const { logger, logSuccess, logError, logInfo } = require('../utils/logger');
+const axios = require("axios");
+const config = require("../config");
+const {
+  generateSignature,
+  generateMerchantReference,
+} = require("../utils/crypto");
+const {
+  randomCustomer,
+  randomAmount,
+  randomPaymentMode,
+} = require("../utils/random");
+const { logger, logSuccess, logError, logInfo } = require("../utils/logger");
+
+/**
+ * Generate a random valid 16-digit card number (Luhn algorithm)
+ */
+function generateRandomCardNumber() {
+  // Generate random 15 digits
+  let cardNumber = "";
+  for (let i = 0; i < 15; i++) {
+    cardNumber += Math.floor(Math.random() * 10);
+  }
+
+  // Calculate Luhn checksum for the 16th digit
+  let sum = 0;
+  let shouldDouble = true;
+
+  // Start from rightmost digit (excluding checksum)
+  for (let i = cardNumber.length - 1; i >= 0; i--) {
+    let digit = parseInt(cardNumber[i]);
+
+    if (shouldDouble) {
+      digit *= 2;
+      if (digit > 9) {
+        digit -= 9;
+      }
+    }
+    sum += digit;
+    shouldDouble = !shouldDouble;
+  }
+
+  const checksum = (10 - (sum % 10)) % 10;
+  return cardNumber + checksum;
+}
+
+function generateRandomExpiryMonth() {
+  return String(Math.floor(Math.random() * 12) + 1).padStart(2, "0");
+}
+
+function generateRandomExpiryYear() {
+  return String(2026 + Math.floor(Math.random() * 5));
+}
+
+function generateRandomCvv() {
+  return String(Math.floor(Math.random() * 900) + 100);
+}
+
+/**
+ * Generate random merchant reference
+ */
+function generateRandomMerchantReference() {
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 10000)
+    .toString()
+    .padStart(4, "0");
+  return `ORD-${timestamp}-${random}`;
+}
 
 /**
  * Create a pay-in request
- * @param {string} accessToken - Bearer token
- * @param {string} clientSecret - Client secret for signature
- * @param {object} options - Optional overrides
- * @returns {Promise<{request: object, response: object}>}
  */
 async function createPayIn(accessToken, clientSecret, options = {}) {
   try {
     const url = `${config.BASE_URL}${config.API_PATHS.PAYIN}`;
-    
-    // Generate unique merchant reference
-    const merchantReference = options.merchantReference || generateMerchantReference();
-    
-    // Generate signature
+
+    const merchantReference =
+      options.merchantReference || generateRandomMerchantReference();
+
     const signature = generateSignature(merchantReference, clientSecret);
-    
-    // Generate random customer data
+
     const customer = options.customer || randomCustomer();
-    
-    // Generate random amount and payment mode
-    const amount = options.amount || randomAmount(config.TEST_CONFIG.MIN_AMOUNT, config.TEST_CONFIG.MAX_AMOUNT);
-    const currency = options.currency || 'INR';
+
+    const amount =
+      options.amount ||
+      randomAmount(
+        config.TEST_CONFIG.MIN_AMOUNT,
+        config.TEST_CONFIG.MAX_AMOUNT,
+      );
+    const currency = options.currency || "INR";
     const paymentMode = options.paymentMode || randomPaymentMode();
-    
+
     const payload = {
       amount,
       currency,
       merchantReference,
       paymentMode,
-      customer
+      customer,
     };
-    
-    logInfo(`Creating Pay-In: ${merchantReference} | ${paymentMode} | ₹${amount}`);
-    
+
+    if (paymentMode === "CARD") {
+      payload.card = {
+        cardNumber: options.cardNumber || generateRandomCardNumber(),
+        expiryMonth: options.expiryMonth || generateRandomExpiryMonth(),
+        expiryYear: options.expiryYear || generateRandomExpiryYear(),
+        cvv: options.cvv || generateRandomCvv(),
+        cardHolderName: options.cardHolderName || customer.name,
+      };
+    }
+
+    logInfo(
+      `Creating Pay-In: ${merchantReference} | ${paymentMode} | ₹${amount}`,
+    );
+
     const response = await axios.post(url, payload, {
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'x-signature': signature
-      }
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "x-signature": signature,
+      },
     });
-    
+
     if (response.data && response.data.id) {
-      logSuccess(`Pay-In created: ID ${response.data.id} | Status: ${response.data.status}`);
+      logSuccess(
+        `Pay-In created: ID ${response.data.id} | Status: ${response.data.status}`,
+      );
     }
-    
+
     return {
       request: {
         payload,
@@ -59,11 +133,10 @@ async function createPayIn(accessToken, clientSecret, options = {}) {
         amount,
         currency,
         paymentMode,
-        customer
+        customer,
       },
-      response: response.data
+      response: response.data,
     };
-    
   } catch (error) {
     logError(`Pay-In failed: ${error.message}`);
     if (error.response) {
@@ -76,10 +149,6 @@ async function createPayIn(accessToken, clientSecret, options = {}) {
 
 /**
  * Create multiple pay-in requests
- * @param {string} accessToken - Bearer token
- * @param {string} clientSecret - Client secret
- * @param {number} count - Number of transactions
- * @returns {Promise<Array>}
  */
 async function createMultiplePayIns(accessToken, clientSecret, count = 5) {
   const results = [];
@@ -89,13 +158,13 @@ async function createMultiplePayIns(accessToken, clientSecret, count = 5) {
       results.push({
         success: true,
         transaction: result,
-        index: i + 1
+        index: i + 1,
       });
     } catch (error) {
       results.push({
         success: false,
         error: error.message,
-        index: i + 1
+        index: i + 1,
       });
     }
   }

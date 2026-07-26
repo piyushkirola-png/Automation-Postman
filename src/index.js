@@ -8,6 +8,7 @@ const { testWebhookProcessing } = require("./tests/07-webhook-processing");
 const { testEndToEndFlow } = require("./tests/08-end-to-end-flow");
 const { testMixedStatus } = require("./tests/09-mixed-status");
 const { testUnifiedRouting } = require("./tests/10-unified-routing-test");
+const { testStripePayuRouting } = require("./tests/11-stripe-payu-routing");
 const { logSection, logSuccess, logError, logInfo } = require("./utils/logger");
 const fs = require("fs");
 const path = require("path");
@@ -20,7 +21,7 @@ async function runAllTests() {
   ║                                                            ║
   ║     Testing: Priority | Failover | Hybrid | Default        ║
   ║              Retry | MDR | Webhook | End-to-End           ║
-  ║              Mixed Status | Unified (NEW!)               ║
+  ║              Mixed Status | Unified | Stripe+PayU (NEW!)   ║
   ║                                                            ║
   ║     Start Time: ${new Date().toLocaleString()}                     ║
   ║                                                            ║
@@ -78,9 +79,7 @@ async function runAllTests() {
     totalTests += r9.total || 0;
     totalPassed += r9.passed || 0;
 
-    // ==============================================
-    // TEST 10: UNIFIED ROUTING TEST (NEW!)
-    // ==============================================
+    // TEST 10: Unified Routing
     const r10 = await testUnifiedRouting();
     results.unifiedRouting = r10;
 
@@ -89,8 +88,17 @@ async function runAllTests() {
       totalTests += r10.summary.totalTransactions || 0;
       totalPassed += r10.summary.passed || 0;
     }
-    // ==============================================
 
+    // Stripe + PayU Routing
+    const r11 = await testStripePayuRouting();
+    results.stripePayuRouting = r11;
+
+    // Calculate Stripe+PayU test stats
+    if (r11 && r11.summary) {
+      totalTests += r11.summary.totalTransactions || 0;
+      totalPassed += r11.summary.passed || 0;
+    }
+    // ==============================================
   } catch (error) {
     logError(`Test suite failed: ${error.message}`);
   }

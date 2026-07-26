@@ -51,7 +51,7 @@ async function testFailoverRouting() {
           merchantReference,
         });
         // AUTO-TRIGGER WEBHOOK
-        await triggerWebhookForPayIn(result, 'SUCCESS');
+        await triggerWebhookForPayIn(result, "SUCCESS");
 
         // Check which gateway was used
         let gatewayUsed = "Unknown";

@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+const crypto = require("crypto");
 
 /**
  * Generate HMAC SHA-256 signature
@@ -8,9 +8,9 @@ const crypto = require('crypto');
  */
 function generateSignature(merchantReference, clientSecret) {
   return crypto
-    .createHmac('sha256', clientSecret)
+    .createHmac("sha256", clientSecret)
     .update(merchantReference)
-    .digest('hex');
+    .digest("hex");
 }
 
 /**
@@ -34,5 +34,5 @@ function generateMerchantReferenceWithTimestamp() {
 module.exports = {
   generateSignature,
   generateMerchantReference,
-  generateMerchantReferenceWithTimestamp
+  generateMerchantReferenceWithTimestamp,
 };

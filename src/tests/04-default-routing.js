@@ -47,7 +47,7 @@ async function testDefaultRouting() {
           merchantReference,
         });
         // AUTO-TRIGGER WEBHOOK
-        await triggerWebhookForPayIn(result, 'SUCCESS');
+        await triggerWebhookForPayIn(result, "SUCCESS");
 
         let actualGateway = "Unknown";
         if (result.response.intent) {
