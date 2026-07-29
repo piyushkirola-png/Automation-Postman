@@ -17,7 +17,7 @@ const {
 } = require("../config/db");
 
 // ============== CONFIGURATION ==============
-const ALLOWED_GATEWAYS = [1, 2, 3, 4, 5];
+const ALLOWED_GATEWAYS = [2, 3, 4, 5];
 const ALL_PAYMENT_MODES = ["UPI", "CARD", "WALLET", "NETBANKING"];
 const ITERATIONS_PER_MODE = parseInt(process.env.ITERATIONS_PER_MODE) || 10;
 const MIN_AMOUNT = parseInt(process.env.MIN_AMOUNT) || 1000;

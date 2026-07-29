@@ -16,7 +16,7 @@ module.exports = {
     },
   },
   TEST_CONFIG: {
-    TRANSACTIONS_PER_USER: parseInt(process.env.TRANSACTIONS_PER_USER) || 10,
+    TRANSACTIONS_PER_USER: parseInt(process.env.TRANSACTIONS_PER_USER),
     MIN_AMOUNT: parseFloat(process.env.MIN_AMOUNT) || 1000,
     MAX_AMOUNT: parseFloat(process.env.MAX_AMOUNT) || 5000,
     PAYMENT_MODES: (

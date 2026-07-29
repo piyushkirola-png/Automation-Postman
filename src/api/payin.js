@@ -12,7 +12,7 @@ const {
 const { logger, logSuccess, logError, logInfo } = require("../utils/logger");
 
 /**
- * Generate a random valid 16-digit card number (Luhn algorithm)
+ * Generate a random valid 16-digit card number
  */
 function generateRandomCardNumber() {
   // Generate random 15 digits
