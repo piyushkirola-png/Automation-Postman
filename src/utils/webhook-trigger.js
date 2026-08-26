@@ -4,162 +4,83 @@ const config = require("../config");
 const { logInfo, logSuccess, logError } = require("./logger");
 
 /**
- * Detect which gateway was used based on response data
+ * ⭐ NEW: Detect gateway from intent JSON
  */
 function detectGateway(response) {
   if (!response) return null;
 
-  // Check gatewayId FIRST (most reliable)
-  if (response.gatewayId) {
-    const gatewayMap = {
-      1: "RAZORPAY",
-      2: "CASHFREE",
-      3: "ADYEN",
-      4: "CHARGEBEE",
-      5: "BENNUPAY",
-      9: "STRIPE",
-      10: "PAYU",
-    };
-    return gatewayMap[response.gatewayId] || null;
-  }
-
-  // Check intent for gateway identification
+  // Check if we have intent field
   if (response.intent) {
     try {
-      // Check if intent is a URL string first
-      const intentString =
-        typeof response.intent === "string"
-          ? response.intent
-          : JSON.stringify(response.intent);
+      let intent = response.intent;
 
-      // 🔥 CHARGEBEE URL DETECTION
-      if (
-        intentString.includes("chargebee.com") ||
-        intentString.includes("chargebee")
-      ) {
+      // Parse if string
+      if (typeof intent === "string") {
+        intent = JSON.parse(intent);
+      }
+
+      // RAZORPAY: has key starting with rzp_test
+      if (intent.key && intent.key.startsWith("rzp_test")) {
+        return "RAZORPAY";
+      }
+
+      // CASHFREE: has paymentSessionId
+      if (intent.paymentSessionId) {
+        return "CASHFREE";
+      }
+
+      // ADYEN: has sessionId starting with CS
+      if (intent.sessionId && intent.sessionId.startsWith("CS")) {
+        return "ADYEN";
+      }
+
+      // CHARGEBEE: has hostedPageId
+      if (intent.hostedPageId) {
         return "CHARGEBEE";
       }
 
-      // STRIPE DETECTION
-      if (
-        intentString.includes("stripe") ||
-        intentString.includes("pi_") ||
-        intentString.includes("pk_test_") ||
-        intentString.includes("sk_test_") ||
-        intentString.includes("payment_intent")
-      ) {
-        return "STRIPE";
-      }
-
-      // PAYU DETECTION
-      if (
-        intentString.includes("payu") ||
-        intentString.includes("txnid") ||
-        intentString.includes("mihpayid") ||
-        intentString.includes("payu_id")
-      ) {
-        return "PAYU";
-      }
-
-      // BENNUPAY DETECTION
-      if (
-        intentString.includes("bennupay") ||
-        intentString.includes("bp_") ||
-        intentString.includes("mock_")
-      ) {
+      // BENNUPAY: has purchaseId
+      if (intent.purchaseId) {
         return "BENNUPAY";
       }
 
-      // Try to parse as JSON for other gateways
-      let parsedIntent = null;
-      try {
-        parsedIntent =
-          typeof response.intent === "string"
-            ? JSON.parse(response.intent)
-            : response.intent;
-      } catch (e) {
-        // Not JSON, continue with string checks
+      // SABPAISA: has paymentId starting with sppay_
+      if (intent.paymentId && intent.paymentId.startsWith("sppay_")) {
+        return "SABPAISA";
       }
 
-      if (parsedIntent) {
-        // Razorpay: has 'key' starting with rzp_test
-        if (parsedIntent.key && parsedIntent.key.startsWith("rzp_test")) {
-          return "RAZORPAY";
-        }
+      // STRIPE: has sessionId starting with cs_test_
+      if (intent.sessionId && intent.sessionId.startsWith("cs_test_")) {
+        return "STRIPE";
+      }
 
-        // Cashfree: has paymentSessionId
-        if (parsedIntent.paymentSessionId) {
-          return "CASHFREE";
-        }
-
-        // Adyen: has pspReference or sessionId starting with CS
-        if (
-          parsedIntent.pspReference ||
-          (parsedIntent.sessionId && parsedIntent.sessionId.startsWith("CS"))
-        ) {
-          return "ADYEN";
-        }
-
-        // ChargeBee: Check for ChargeBee specific fields
-        if (
-          parsedIntent.chargebee_id ||
-          parsedIntent.cb_token ||
-          parsedIntent.chargebee_session
-        ) {
-          return "CHARGEBEE";
-        }
-
-        // STRIPE - check for Stripe specific fields
-        if (
-          parsedIntent.client_secret ||
-          parsedIntent.payment_intent ||
-          parsedIntent.publishableKey ||
-          parsedIntent.stripe_id
-        ) {
-          return "STRIPE";
-        }
-
-        // PAYU - check for PayU specific fields
-        if (
-          parsedIntent.txnid ||
-          parsedIntent.mihpayid ||
-          parsedIntent.payu_id ||
-          parsedIntent.payu_token
-        ) {
-          return "PAYU";
-        }
-
-        // Bennupay: Check for Bennupay specific fields
-        if (
-          parsedIntent.bennupay_token ||
-          parsedIntent.bp_session ||
-          parsedIntent.bennupay_id
-        ) {
-          return "BENNUPAY";
-        }
+      // PAYU: has txnid
+      if (intent.txnid) {
+        return "PAYU";
       }
     } catch (e) {
-      // Ignore parse errors
+      // Not JSON, continue with other checks
     }
   }
 
-  // Check gatewayName field
-  if (response.gatewayName) {
-    const name = response.gatewayName.toUpperCase();
-    if (name.includes("RAZORPAY")) return "RAZORPAY";
-    if (name.includes("CASHFREE")) return "CASHFREE";
-    if (name.includes("ADYEN")) return "ADYEN";
-    if (name.includes("CHARGEBEE")) return "CHARGEBEE";
-    if (name.includes("BENNUPAY")) return "BENNUPAY";
-    if (name.includes("STRIPE")) return "STRIPE";
-    if (name.includes("PAYU")) return "PAYU";
+  // Fallback: check URL for gateway hints
+  if (response.url) {
+    const url = response.url.toLowerCase();
+    if (url.includes("rzp.io")) return "RAZORPAY";
+    if (url.includes("cashfree")) return "CASHFREE";
+    if (url.includes("adyen")) return "ADYEN";
+    if (url.includes("chargebee")) return "CHARGEBEE";
+    if (url.includes("bennupay")) return "BENNUPAY";
+    if (url.includes("sabpaisa")) return "SABPAISA";
+    if (url.includes("stripe")) return "STRIPE";
+    if (url.includes("payu")) return "PAYU";
   }
 
   return null;
 }
 
 /**
- * Get webhook payload for specific gateway
+ * ⭐ NEW: Get webhook payload for specific gateway (matching current backend)
  */
 function getWebhookPayload(
   gateway,
@@ -184,13 +105,26 @@ function getWebhookPayload(
               currency: "INR",
               status: "captured",
               order_id: `order_${Math.random().toString(36).substr(2, 10)}`,
+              invoice_id: null,
+              international: false,
               method: paymentMode.toLowerCase(),
+              amount_refunded: 0,
+              refund_status: null,
               captured: true,
+              description: `Payment for ${merchantReference}`,
+              card_id: null,
+              bank: null,
+              wallet: null,
+              vpa: null,
               email: customer.email,
               contact: customer.phone.replace(/[^0-9]/g, ""),
               notes: {
                 merchantReference: merchantReference,
               },
+              fee: 0,
+              tax: 0,
+              error_code: null,
+              error_description: null,
               created_at: Math.floor(Date.now() / 1000),
             },
           },
@@ -205,6 +139,9 @@ function getWebhookPayload(
               receipt: merchantReference,
               status: "paid",
               attempts: 1,
+              notes: {
+                merchantReference: merchantReference,
+              },
               created_at: Math.floor(Date.now() / 1000) - 60,
             },
           },
@@ -221,6 +158,8 @@ function getWebhookPayload(
             order_amount: amount,
             order_currency: "INR",
             order_status: "PAID",
+            order_expiry_time: null,
+            order_note: `Payment for order ${merchantReference}`,
             created_at: new Date().toISOString(),
           },
           payment: {
@@ -230,6 +169,11 @@ function getWebhookPayload(
             payment_status: "SUCCESS",
             payment_method: paymentMode,
             payment_time: new Date().toISOString(),
+            bank_reference: null,
+            utr: null,
+            acquirer_data: {
+              rrn: null,
+            },
             customer_details: {
               customer_name: customer.name,
               customer_email: customer.email,
@@ -245,6 +189,13 @@ function getWebhookPayload(
         notificationItems: [
           {
             NotificationRequestItem: {
+              additionalData: {
+                authCode: Math.random().toString().substr(2, 6),
+                avsResult: "0",
+                cvcResult: "0",
+                responseCode: "0000",
+                totalFraudScore: "0",
+              },
               amount: {
                 currency: "INR",
                 value: amountInPaise,
@@ -274,30 +225,33 @@ function getWebhookPayload(
             reference_number: merchantReference,
             payment_method: {
               card: {
-                last4: "1111",
-                card_type: "VISA",
+                last4: null,
+                card_type: paymentMode,
               },
             },
-            date: Math.floor(Date.now() / 1000),
-            authorization_id: `auth_${Math.random().toString(36).substr(2, 10)}`,
+            date: new Date().toISOString(),
+            authorization_id: null,
             gateway: {
-              reference_id: `txn_${Math.random().toString(36).substr(2, 10)}`,
+              reference_id: `gateway_${Math.random().toString(36).substr(2, 10)}`,
             },
           },
           invoice: {
             id: merchantReference,
             status: "paid",
             amount: amountInPaise,
-            paid_at: Math.floor(Date.now() / 1000),
+            paid_at: new Date().toISOString(),
           },
           customer: {
             id: `cust_${Math.random().toString(36).substr(2, 10)}`,
             email: customer.email,
+            name: customer.name,
+            phone: customer.phone,
           },
         },
         webhook: {
           id: `webhook_${Math.random().toString(36).substr(2, 10)}`,
           webhook_status: "sent",
+          received_at: new Date().toISOString(),
         },
       };
 
@@ -332,6 +286,22 @@ function getWebhookPayload(
             timestamp: new Date().toISOString(),
           },
         ],
+      };
+
+    case "SABPAISA":
+      return {
+        paymentId: `sppay_${Math.random().toString(36).substr(2, 10)}`,
+        merchantTxnId: merchantReference,
+        amount: amountInPaise,
+        currency: "INR",
+        status: "SUCCESS",
+        bankReference: `SBIN${Math.random().toString().substr(2, 9)}`,
+        transactionDate: new Date().toISOString(),
+        paymentMethod: paymentMode,
+        paymentMode: paymentMode,
+        customerEmail: customer.email,
+        customerPhone: customer.phone,
+        customerName: customer.name,
       };
 
     case "STRIPE":
@@ -423,14 +393,14 @@ function getWebhookPayload(
 }
 
 /**
- * Trigger webhook for a pay-in
+ * ⭐ UPDATED: Trigger webhook for a pay-in
  */
 async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
   const { request, response } = payInResult;
   const { merchantReference, paymentMode, customer } = request;
   const amount = request.amount;
 
-  // Detect gateway
+  // ⭐ Detect gateway from intent
   const gateway = detectGateway(response);
 
   if (!gateway) {
@@ -440,9 +410,8 @@ async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
   }
 
   logInfo(`✅ Gateway detected: ${gateway}`);
-  logInfo(`🔄 Triggering ${gateway} webhook for ${merchantReference}...`);
+  logInfo(`🔔 Triggering ${gateway} webhook for ${merchantReference}...`);
 
-  // Get webhook payload
   const webhookPayload = getWebhookPayload(
     gateway,
     merchantReference,
@@ -452,22 +421,21 @@ async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
     forceStatus || "SUCCESS",
   );
 
-  logInfo(`📨 Webhook payload: ${JSON.stringify(webhookPayload)}`);
-
   if (!webhookPayload) {
     logError(`❌ No webhook payload for ${gateway}`);
     return null;
   }
 
-  // Get webhook URL - Using config paths
   const webhookUrls = {
     RAZORPAY: config.API_PATHS.WEBHOOKS.RAZORPAY,
     CASHFREE: config.API_PATHS.WEBHOOKS.CASHFREE,
     ADYEN: config.API_PATHS.WEBHOOKS.ADYEN,
     CHARGEBEE: config.API_PATHS.WEBHOOKS.CHARGEBEE,
     BENNUPAY: config.API_PATHS.WEBHOOKS.BENNUPAY,
+    SABPAISA: config.API_PATHS.WEBHOOKS.SABPAISA,
     STRIPE: config.API_PATHS.WEBHOOKS.STRIPE,
-    PAYU: config.API_PATHS.WEBHOOKS.PAYU,
+    // PAYU: config.API_PATHS.WEBHOOKS.PAYU,
+    PAYU: "/webhooks/payu/success",
   };
 
   const webhookUrl = `${config.BASE_URL}${webhookUrls[gateway]}`;
@@ -504,70 +472,8 @@ async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
   }
 }
 
-/**
- * Send ChargeBee webhook manually
- */
-async function sendChargeBeeWebhook(merchantReference, amount, customer) {
-  const amountInPaise = Math.round(amount * 100);
-
-  const payload = {
-    event_type: "payment_succeeded",
-    content: {
-      payment: {
-        id: `pay_${Math.random().toString(36).substr(2, 10)}`,
-        status: "success",
-        amount: amountInPaise,
-        currency_code: "INR",
-        reference_number: merchantReference,
-        payment_method: {
-          card: {
-            last4: "1111",
-            card_type: "VISA",
-          },
-        },
-        date: Math.floor(Date.now() / 1000),
-        authorization_id: `auth_${Math.random().toString(36).substr(2, 10)}`,
-        gateway: {
-          reference_id: `txn_${Math.random().toString(36).substr(2, 10)}`,
-        },
-      },
-      invoice: {
-        id: merchantReference,
-        status: "paid",
-        amount: amountInPaise,
-        paid_at: Math.floor(Date.now() / 1000),
-      },
-      customer: {
-        id: `cust_${Math.random().toString(36).substr(2, 10)}`,
-        email: customer.email,
-      },
-    },
-    webhook: {
-      id: `webhook_${Math.random().toString(36).substr(2, 10)}`,
-      webhook_status: "sent",
-    },
-  };
-
-  const url = `${config.BASE_URL}/api/webhooks/chargebee`;
-
-  logInfo(`📨 Sending ChargeBee webhook to: ${url}`);
-
-  try {
-    const response = await axios.post(url, payload, {
-      headers: { "Content-Type": "application/json" },
-      timeout: 5000,
-    });
-    logSuccess(`✅ ChargeBee webhook triggered successfully`);
-    return response.data;
-  } catch (error) {
-    logError(`❌ ChargeBee webhook failed: ${error.message}`);
-    throw error;
-  }
-}
-
 module.exports = {
   triggerWebhookForPayIn,
   detectGateway,
   getWebhookPayload,
-  sendChargeBeeWebhook,
 };

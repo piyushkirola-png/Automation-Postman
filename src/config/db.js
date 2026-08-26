@@ -1,4 +1,3 @@
-// src/config/db.js
 const { Pool } = require("pg");
 require("dotenv").config();
 
@@ -12,6 +11,8 @@ const pool = new Pool({
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
+  maxUses: 7500,
+  allowExitOnIdle: true,
 });
 
 // Test connection
@@ -25,10 +26,8 @@ pool.on("error", (err) => {
 
 /**
  * Get routing configuration for specific merchants
- * @param {number[]} merchantIds - Array of merchant IDs (default: 1-10)
  */
 async function getRoutingConfig(merchantIds = null) {
-  // If no merchantIds provided, default to 1-10
   const ids = merchantIds || [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
   const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
 
@@ -44,12 +43,12 @@ async function getRoutingConfig(merchantIds = null) {
       mgp."enableFailover",
       mgp."maxRetries",
       g.name AS "gatewayName"
-    FROM merchants mp
-    JOIN merchant_routing_preferences mrp
+    FROM "Merchant" mp
+    JOIN "MerchantRoutingPreference" mrp
       ON mp.id = mrp."merchantId"
-    JOIN merchant_gateway_priorities mgp
+    JOIN "MerchantGatewayPriority" mgp
       ON mrp.id = mgp."merchantRoutingPrefId"
-    JOIN gateways g
+    JOIN "Gateway" g
       ON mgp."gatewayId" = g.id
     WHERE mp.id IN (${placeholders})
       AND mp."isActive" = true
@@ -57,12 +56,15 @@ async function getRoutingConfig(merchantIds = null) {
     ORDER BY mp.id, mgp.priority
   `;
 
+  const client = await pool.connect();
   try {
-    const result = await pool.query(query, ids);
+    const result = await client.query(query, ids);
     return result.rows;
   } catch (error) {
     console.error("❌ Error fetching routing config:", error);
     throw error;
+  } finally {
+    client.release();
   }
 }
 
@@ -103,7 +105,6 @@ function buildMerchantConfig(rawData) {
     let modes = [];
     try {
       if (typeof paymentModes === "string") {
-        // Handle PostgreSQL array format: {UPI,CARD} or ["UPI","CARD"]
         if (paymentModes.startsWith("{")) {
           modes = paymentModes.replace(/[{}]/g, "").split(",");
         } else {
@@ -149,6 +150,7 @@ function buildMerchantConfig(rawData) {
 
 /**
  * Close database connection
+ * ✅ FIXED: Properly closes all connections
  */
 async function closeDbConnection() {
   await pool.end();

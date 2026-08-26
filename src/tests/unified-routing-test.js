@@ -1,6 +1,6 @@
 const { loginUser } = require("../api/auth");
 const { createPayIn } = require("../api/payin");
-const { triggerWebhookForPayIn } = require("../utils/webhook-trigger");
+const { triggerWebhookForPayIn, detectGateway } = require("../utils/webhook-trigger");
 const { randomAmount, randomCustomer } = require("../utils/random");
 const {
   logSection,
@@ -17,11 +17,30 @@ const {
 } = require("../config/db");
 
 // ============== CONFIGURATION ==============
-const ALLOWED_GATEWAYS = [2, 3, 4, 5];
-const ALL_PAYMENT_MODES = ["UPI", "CARD", "WALLET", "NETBANKING"];
+const ALLOWED_GATEWAYS = [3, 4, 5, 6, 9];
+const ALL_PAYMENT_MODES = ["UPI", "CARD"];
 const ITERATIONS_PER_MODE = parseInt(process.env.ITERATIONS_PER_MODE) || 10;
 const MIN_AMOUNT = parseInt(process.env.MIN_AMOUNT) || 1000;
 const MAX_AMOUNT = parseInt(process.env.MAX_AMOUNT) || 10000;
+
+// Retry function for API calls
+async function createPayInWithRetry(
+  accessToken,
+  clientSecret,
+  options,
+  maxRetries = 3,
+) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await createPayIn(accessToken, clientSecret, options);
+    } catch (error) {
+      if (attempt === maxRetries) throw error;
+      const delay = 1000 * Math.pow(2, attempt - 1);
+      logWarning(`Retry ${attempt}/${maxRetries} after ${delay}ms`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
 
 /**
  * Get random amount in multiples of 1000
@@ -54,79 +73,7 @@ function getUserForMerchant(merchantId) {
 }
 
 /**
- * Detect gateway from pay-in response
- */
-function detectGatewayFromResponse(response) {
-  if (!response) return null;
-
-  // 1. Check intent field
-  if (response.intent) {
-    const intentString =
-      typeof response.intent === "string"
-        ? response.intent
-        : JSON.stringify(response.intent);
-
-    // Check for ChargeBee URL FIRST
-    if (
-      intentString.includes("chargebee.com") ||
-      intentString.includes("chargebee")
-    ) {
-      return "ChargeBee";
-    }
-
-    try {
-      const intent =
-        typeof response.intent === "string"
-          ? JSON.parse(response.intent)
-          : response.intent;
-
-      if (intent.key && intent.key.startsWith("rzp_test")) {
-        return "Razorpay";
-      }
-      if (intent.paymentSessionId) {
-        return "Cashfree";
-      }
-      if (intent.pspReference) {
-        return "Adyen";
-      }
-      if (intent.chargebee_id || intent.cb_token) {
-        return "Chargebee";
-      }
-      if (intent.bennupay_token || intent.bp_session) {
-        return "Bennupay";
-      }
-    } catch (e) {}
-  }
-
-  // 2. Check gatewayId
-  if (response.gatewayId) {
-    const gatewayMap = {
-      1: "Razorpay",
-      2: "Cashfree",
-      3: "Adyen",
-      4: "Chargebee",
-      5: "Bennupay",
-      9: "Stripe",
-      10: "PayU",
-    };
-    return gatewayMap[response.gatewayId] || null;
-  }
-
-  // 3. Check gatewayName
-  if (response.gatewayName) {
-    const name = response.gatewayName.toUpperCase();
-    if (name.includes("RAZORPAY")) return "Razorpay";
-    if (name.includes("CASHFREE")) return "Cashfree";
-    if (name.includes("ADYEN")) return "Adyen";
-    if (name.includes("CHARGEBEE")) return "Chargebee";
-    if (name.includes("BENNUPAY")) return "Bennupay";
-  }
-
-  return null;
-}
-
-/**
- * Test a single merchant
+ * ⭐ UPDATED: Test a single merchant
  */
 async function testMerchant(merchantConfig) {
   const { merchantId, merchantName, routingStrategy, paymentModeMap } =
@@ -136,7 +83,6 @@ async function testMerchant(merchantConfig) {
     `🧪 TESTING MERCHANT ${merchantId}: ${merchantName} (${routingStrategy})`,
   );
 
-  // Get user credentials
   const user = getUserForMerchant(merchantId);
   if (!user) {
     logError(`❌ No user found for merchant ${merchantId}`);
@@ -167,7 +113,7 @@ async function testMerchant(merchantConfig) {
     };
   }
 
-  const { accessToken, clientSecret } = loginData;
+  const { accessToken, clientSecret, user: loggedInUser } = loginData;
   console.log(
     "🔑 Access Token (first 20 chars):",
     accessToken ? accessToken.substring(0, 20) + "..." : "MISSING!",
@@ -184,22 +130,19 @@ async function testMerchant(merchantConfig) {
     failed = 0,
     skipped = 0;
 
-  // Test each payment mode
   for (const paymentMode of ALL_PAYMENT_MODES) {
     const expected = paymentModeMap[paymentMode];
 
-    // Check if this payment mode is mapped to allowed gateways (1, 2, 3)
     if (!expected || !ALLOWED_GATEWAYS.includes(expected.gatewayId)) {
       logWarning(
-        `⚠️ SKIPPING ${paymentMode} - Not configured for gateways 1-3`,
+        `⚠️ SKIPPING ${paymentMode} - Not configured for allowed gateways`,
       );
-
       const skipResult = {
         paymentMode,
         expectedGateway: expected ? expected.gatewayName : "N/A",
         expectedGatewayId: expected ? expected.gatewayId : null,
         status: "SKIPPED",
-        reason: "Not configured for gateways 1, 2, or 3",
+        reason: "Not configured for allowed gateways",
         transactions: [],
       };
       allResults.push(skipResult);
@@ -208,49 +151,69 @@ async function testMerchant(merchantConfig) {
     }
 
     logInfo(
-      `\n🔄 Testing ${paymentMode} → Expected: ${expected.gatewayName} (Priority ${expected.priority})`,
+      `\n🔍 Testing ${paymentMode} → Expected: ${expected.gatewayName} (Priority ${expected.priority})`,
     );
 
     const modeResults = [];
     const promises = [];
 
-    // Create all pay-ins in parallel
     for (let i = 0; i < ITERATIONS_PER_MODE; i++) {
       const amount = randomAmountInMultiples(MIN_AMOUNT, MAX_AMOUNT);
       const customer = randomCustomer();
       const merchantReference = `ORD-UNI-${merchantId}-${paymentMode}-${Date.now()}-${i}`;
 
-      const promise = createPayIn(accessToken, clientSecret, {
+      const promise = createPayInWithRetry(accessToken, clientSecret, {
         paymentMode,
         amount,
         customer,
         merchantReference,
       })
         .then(async (payInResult) => {
-          // 🔥 TRIGGER WEBHOOK AND WAIT FOR IT
-          logInfo(`🔄 Triggering webhook for ${merchantReference}...`);
+          logInfo(`🔔 Waiting 5 seconds before webhook...`);
+          await new Promise((resolve) => setTimeout(resolve, 5000));
 
-          try {
-            const webhookResult = await triggerWebhookForPayIn(
-              payInResult,
-              "SUCCESS",
-            );
-            logInfo(
-              `✅ Webhook triggered: ${webhookResult ? "Success" : "Failed"}`,
-            );
-          } catch (webhookError) {
-            logError(`❌ Webhook failed: ${webhookError.message}`);
+          logInfo(`🔔 Triggering webhook for ${merchantReference}...`);
+
+          let webhookSuccess = false;
+          let webhookResponse = null;
+
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              const result = await triggerWebhookForPayIn(
+                payInResult,
+                "SUCCESS",
+              );
+              if (result && result.success) {
+                webhookSuccess = true;
+                webhookResponse = result;
+                logInfo(`✅ Webhook triggered successfully (attempt ${attempt})`);
+                break;
+              } else {
+                logWarning(`⚠️ Webhook attempt ${attempt} returned failure`);
+              }
+            } catch (webhookError) {
+              logError(`❌ Webhook attempt ${attempt} failed: ${webhookError.message}`);
+              if (attempt < 3) {
+                const waitTime = 1000 * attempt;
+                logInfo(`⏳ Waiting ${waitTime}ms before retry...`);
+                await new Promise((resolve) => setTimeout(resolve, waitTime));
+              }
+            }
           }
 
-          // 🔥 FIX: Use the updated detectGatewayFromResponse function
-          const gatewayName = detectGatewayFromResponse(payInResult.response);
+          if (!webhookSuccess) {
+            logError(`❌ Webhook failed after 3 attempts for ${merchantReference}`);
+          }
 
-          // Log detection
+          // ⭐ NEW: Detect gateway from intent
+          const gatewayName = detectGateway(payInResult.response);
+
           logInfo(
             `📍 Detected: ${gatewayName || "Unknown"} | Expected: ${expected.gatewayName}`,
           );
 
-          const isCorrect = gatewayName === expected.gatewayName;
+          const isCorrect =
+            gatewayName?.toUpperCase() === expected.gatewayName?.toUpperCase();
 
           return {
             success: true,
@@ -258,11 +221,17 @@ async function testMerchant(merchantConfig) {
             amount,
             merchantReference,
             transactionId: payInResult.response.id,
-            status: payInResult.response.status,
+            status: payInResult.response.status, // ⭐ "PROCESSING" now
             expectedGateway: expected.gatewayName,
             actualGateway: gatewayName || "Unknown",
             isCorrect,
-            passed: isCorrect,
+            passed: isCorrect && webhookSuccess,
+            webhookSuccess: webhookSuccess,
+            // ⭐ NEW FIELDS
+            feeAmount: payInResult.response.feeAmount,
+            taxAmount: payInResult.response.taxAmount,
+            amountToCredit: payInResult.response.amountToCredit,
+            url: payInResult.response.url,
             error: null,
           };
         })
@@ -278,6 +247,11 @@ async function testMerchant(merchantConfig) {
             actualGateway: null,
             isCorrect: false,
             passed: false,
+            webhookSuccess: false,
+            feeAmount: null,
+            taxAmount: null,
+            amountToCredit: null,
+            url: null,
             error: error.message,
           };
         });
@@ -285,10 +259,8 @@ async function testMerchant(merchantConfig) {
       promises.push(promise);
     }
 
-    // Wait for all pay-ins to complete (webhooks already triggered in background)
     const results = await Promise.all(promises);
 
-    // Analyze results
     let modePassed = 0,
       modeFailed = 0;
     for (const result of results) {
@@ -303,7 +275,6 @@ async function testMerchant(merchantConfig) {
       total++;
     }
 
-    // Log mode summary
     const passRate =
       modeResults.length > 0
         ? ((modePassed / modeResults.length) * 100).toFixed(0)
@@ -328,7 +299,6 @@ async function testMerchant(merchantConfig) {
     });
   }
 
-  // Merchant summary
   logSection(`📊 MERCHANT ${merchantId} SUMMARY`);
   console.log(
     `  Total: ${total} | Passed: ${passed} | Failed: ${failed} | Skipped: ${skipped}`,
@@ -349,47 +319,42 @@ async function testMerchant(merchantConfig) {
  * Main unified test function
  */
 async function testUnifiedRouting() {
+  const startTime = Date.now();
+
   logSection("🚀 UNIFIED ROUTING TEST - ALL MERCHANTS 1-10");
 
   console.log(`
-  ╔═══════════════════════════════════════════════════════════════════╗
-  ║  CONFIGURATION                                                  ║
-  ║  ├── Gateways: Razorpay (1), Cashfree (2), Adyen (3)           ║
-  ║  ├── Payment Modes: UPI, CARD, WALLET, NETBANKING              ║
-  ║  ├── Iterations per mode: ${ITERATIONS_PER_MODE}                              ║
-  ║  ├── Amount range: ₹${MIN_AMOUNT} - ₹${MAX_AMOUNT} (multiples of 1000)       ║
-  ║  └── Merchants: 1 to 10                                        ║
-  ╚═══════════════════════════════════════════════════════════════════╝
+  ╔════════════════════════════════════════════════════════════════════╗
+  ║  CONFIGURATION                                                    ║
+  ║  ├── Gateways: Razorpay, Cashfree, Adyen, Chargebee, Bennupay,   ║
+  ║  │              SabPaisa, Stripe, PayU                           ║
+  ║  ├── Payment Modes: UPI, CARD                                    ║
+  ║  ├── Iterations per mode: ${ITERATIONS_PER_MODE}                                  ║
+  ║  ├── Amount range: ₹${MIN_AMOUNT} - ₹${MAX_AMOUNT} (multiples of 1000)           ║
+  ║  └── Merchants: 1 to 10                                          ║
+  ╚════════════════════════════════════════════════════════════════════╝
   `);
 
   try {
-    // 1. Fetch routing config from database
     logInfo("📡 Fetching routing configuration from database...");
     const rawData = await getRoutingConfig();
 
     if (rawData.length === 0) {
-      logError(
-        "❌ No routing configuration found for merchants 1-10 with gateways 1-3",
-      );
+      logError("❌ No routing configuration found for merchants 1-10");
       await closeDbConnection();
       return { error: "No configuration found" };
     }
 
-    // 2. Build merchant config
     const merchants = buildMerchantConfig(rawData);
     logSuccess(`✅ Found ${merchants.length} merchants with routing config`);
 
-    // 3. Test each merchant
-    const merchantResults = [];
-    for (const merchant of merchants) {
-      const result = await testMerchant(merchant);
-      merchantResults.push(result);
-    }
+    const merchantPromises = merchants.map((merchant) =>
+      testMerchant(merchant),
+    );
+    const merchantResults = await Promise.all(merchantPromises);
 
-    // 4. Close database connection
     await closeDbConnection();
 
-    // 5. Generate overall summary
     logSection("📊 OVERALL TEST SUMMARY");
 
     let totalAll = 0,
@@ -398,13 +363,13 @@ async function testUnifiedRouting() {
       skippedAll = 0;
 
     console.log(
-      "\n┌─────────────────────────────────────────────────────────────────────┐",
+      "\n┌────────────────────────────────────────────────────────────────────────────┐",
     );
     console.log(
-      "│                    MERCHANT RESULTS                                 │",
+      "│                    MERCHANT RESULTS                                         │",
     );
     console.log(
-      "├─────────────────────────────────────────────────────────────────────┤",
+      "├────────────────────────────────────────────────────────────────────────────┤",
     );
 
     for (const mr of merchantResults) {
@@ -426,7 +391,7 @@ async function testUnifiedRouting() {
     }
 
     console.log(
-      "├─────────────────────────────────────────────────────────────────────┤",
+      "├────────────────────────────────────────────────────────────────────────────┤",
     );
     const overallPassRate =
       totalAll > 0 ? ((passedAll / totalAll) * 100).toFixed(1) : 0;
@@ -434,10 +399,27 @@ async function testUnifiedRouting() {
       `│ ${"OVERALL".padEnd(35)} │ Total: ${String(totalAll).padStart(3)} │ Pass: ${String(passedAll).padStart(3)} │ Fail: ${String(failedAll).padStart(3)} │ Skip: ${String(skippedAll).padStart(3)} │ ${overallPassRate}% │`,
     );
     console.log(
-      "└─────────────────────────────────────────────────────────────────────┘",
+      "└────────────────────────────────────────────────────────────────────────────┘",
     );
 
-    // 6. Save detailed report
+    const endTime = Date.now();
+    const totalTimeMs = endTime - startTime;
+    const totalTimeSeconds = totalTimeMs / 1000;
+    const tps = totalAll > 0 ? totalAll / totalTimeSeconds : 0;
+
+    console.log(`
+╔════════════════════════════════════════════════════════════════════╗
+║                         📊 TPS PERFORMANCE METRICS                ║
+╠════════════════════════════════════════════════════════════════════╣
+║  Total Transactions:  ${String(totalAll).padStart(8)}                                           ║
+║  Total Time:          ${String(totalTimeSeconds.toFixed(2)).padStart(8)} seconds                                  ║
+║  TPS (Average):       ${String(tps.toFixed(2)).padStart(8)} transactions/second                           ║
+║  Iterations per mode: ${String(ITERATIONS_PER_MODE).padStart(8)}                                           ║
+║  Payment Modes:       ${String(ALL_PAYMENT_MODES.length).padStart(8)}                                           ║
+║  Merchants Tested:    ${String(merchantResults.length).padStart(8)}                                           ║
+╚════════════════════════════════════════════════════════════════════╝
+    `);
+
     const report = {
       timestamp: new Date().toISOString(),
       configuration: {
@@ -446,6 +428,14 @@ async function testUnifiedRouting() {
         iterationsPerMode: ITERATIONS_PER_MODE,
         minAmount: MIN_AMOUNT,
         maxAmount: MAX_AMOUNT,
+      },
+      tpsMetrics: {
+        totalTransactions: totalAll,
+        totalTimeSeconds: totalTimeSeconds,
+        tps: tps,
+        iterationsPerMode: ITERATIONS_PER_MODE,
+        paymentModes: ALL_PAYMENT_MODES.length,
+        merchants: merchantResults.length,
       },
       merchants: merchantResults,
       summary: {

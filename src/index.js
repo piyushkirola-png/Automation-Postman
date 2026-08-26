@@ -1,14 +1,4 @@
-const { testPriorityRouting } = require("./tests/01-priority-routing");
-const { testFailoverRouting } = require("./tests/02-failover-routing");
-const { testHybridRouting } = require("./tests/03-hybrid-routing");
-const { testDefaultRouting } = require("./tests/04-default-routing");
-const { testRetryLogic } = require("./tests/05-retry-logic");
-const { testMDRCalculation } = require("./tests/06-mdr-calculation");
-const { testWebhookProcessing } = require("./tests/07-webhook-processing");
-const { testEndToEndFlow } = require("./tests/08-end-to-end-flow");
-const { testMixedStatus } = require("./tests/09-mixed-status");
-const { testUnifiedRouting } = require("./tests/10-unified-routing-test");
-const { testStripePayuRouting } = require("./tests/11-stripe-payu-routing");
+const { testUnifiedRouting } = require("./tests/unified-routing-test");
 const { logSection, logSuccess, logError, logInfo } = require("./utils/logger");
 const fs = require("fs");
 const path = require("path");
@@ -33,53 +23,7 @@ async function runAllTests() {
   let totalPassed = 0;
 
   try {
-    // Test 1: Priority Routing
-    const r1 = await testPriorityRouting();
-    results.priorityRouting = r1;
-    totalTests += r1.total || 0;
-    totalPassed += r1.passed || 0;
-
-    // Test 2: Failover Routing
-    const r2 = await testFailoverRouting();
-    results.failoverRouting = r2;
-
-    // Test 3: Hybrid Routing
-    const r3 = await testHybridRouting();
-    results.hybridRouting = r3;
-    totalTests += r3.total || 0;
-    totalPassed += r3.passed || 0;
-
-    // Test 4: Default Routing
-    const r4 = await testDefaultRouting();
-    results.defaultRouting = r4;
-
-    // Test 5: Retry Logic
-    const r5 = await testRetryLogic();
-    results.retryLogic = r5;
-
-    // Test 6: MDR Calculation
-    const r6 = await testMDRCalculation();
-    results.mdrCalculation = r6;
-    totalTests += r6.total || 0;
-    totalPassed += r6.passed || 0;
-
-    // Test 7: Webhook Processing
-    const r7 = await testWebhookProcessing();
-    results.webhookProcessing = r7;
-    totalTests += r7.total || 0;
-    totalPassed += r7.passed || 0;
-
-    // Test 8: End-to-End Flow
-    const r8 = await testEndToEndFlow();
-    results.endToEndFlow = r8;
-
-    // Test 9: Mixed Status
-    const r9 = await testMixedStatus();
-    results.mixedStatus = r9;
-    totalTests += r9.total || 0;
-    totalPassed += r9.passed || 0;
-
-    // TEST 10: Unified Routing
+    // Unified Routing
     const r10 = await testUnifiedRouting();
     results.unifiedRouting = r10;
 

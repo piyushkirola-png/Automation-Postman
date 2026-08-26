@@ -10,7 +10,7 @@ module.exports = {
     },
     gopalkrishna: {
       id: 5,
-      name: "Gopal Kirshna",
+      name: "Gopal Krishna",
       email: "gopalkrishna@gmail.com",
       role: "MERCHANT",
       merchantId: 1,

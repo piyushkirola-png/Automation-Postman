@@ -22,21 +22,23 @@ async function loginUser(email, password) {
     });
 
     if (response.data.success) {
-      const { accessToken, user } = response.data.data;
-      const clientSecret = user.clientSecret;
+      const data = response.data.data;
+      const accessToken = data.accessToken;
+      const user = data.user;
+      const clientSecret = user?.clientSecret || null;
 
       logSuccess(`Login successful for ${email}`);
-      logInfo(`Merchant ID: ${user.merchantId}`);
+      logInfo(`Merchant ID: ${user?.merchantId || 'N/A'}`);
 
       return {
         accessToken,
         clientSecret,
         user: {
-          id: user.id,
-          email: user.email,
-          fullName: user.fullName,
-          role: user.role,
-          merchantId: user.merchantId,
+          id: user?.id,
+          email: user?.email,
+          fullName: user?.fullName,
+          role: user?.role,
+          merchantId: user?.merchantId,
         },
       };
     } else {

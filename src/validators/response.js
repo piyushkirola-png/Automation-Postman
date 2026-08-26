@@ -1,5 +1,3 @@
-// src/validators/response.js
-
 const {
   logger,
   logSuccess,
@@ -8,143 +6,87 @@ const {
   logWarning,
 } = require("../utils/logger");
 
-// Gateway mapping for consistent reference
+// ⭐ UPDATED GATEWAY MAP with SabPaisa
 const GATEWAY_MAP = {
   1: { id: 1, name: "Razorpay", keyPatterns: ["rzp_test"] },
   2: { id: 2, name: "Cashfree", keyPatterns: ["cashfree", "cf_"] },
   3: { id: 3, name: "Adyen", keyPatterns: ["adyen"] },
   4: { id: 4, name: "ChargeBee", keyPatterns: ["chargebee", "cb_", "ch_"] },
   5: { id: 5, name: "Bennupay", keyPatterns: ["bennupay", "bp_"] },
+  6: { id: 6, name: "SabPaisa", keyPatterns: ["sppay_", "sabpaisa"] },
+  9: { id: 9, name: "Stripe", keyPatterns: ["stripe", "cs_test_"] },
+  10: { id: 10, name: "PayU", keyPatterns: ["payu", "txnid"] },
 };
 
 /**
- * Detect gateway ID from response
- * @param {object} response - Pay-in response
- * @returns {number|null} - Gateway ID or null if not detected
+ * ⭐ NEW: Detect gateway ID from intent JSON
  */
 function detectGatewayId(response) {
   if (!response) return null;
 
-  // 1. Check gatewayId field (most reliable)
-  if (response.gatewayId) {
-    const id = parseInt(response.gatewayId);
-    if (GATEWAY_MAP[id]) {
-      return id;
-    }
-  }
-
-  // 2. Check intent field
+  // Check intent field
   if (response.intent) {
     try {
-      // 🔥 FIX: Check if intent is a URL string first
-      const intentString =
-        typeof response.intent === "string"
-          ? response.intent
-          : JSON.stringify(response.intent);
-
-      // 🔥 CHARGEBEE DETECTION: URL contains chargebee.com
-      if (
-        intentString.includes("chargebee.com") ||
-        intentString.includes("chargebee") ||
-        intentString.includes("invoice_id=")
-      ) {
-        return 4; // ChargeBee ID
+      let intent = response.intent;
+      if (typeof intent === "string") {
+        intent = JSON.parse(intent);
       }
 
-      // 🔥 BENNUPAY DETECTION: Check for Bennupay patterns
-      if (
-        intentString.includes("bennupay") ||
-        intentString.includes("bp_") ||
-        intentString.includes("mock_")
-      ) {
-        return 5; // Bennupay ID
+      // Razorpay
+      if (intent.key && intent.key.startsWith("rzp_test")) {
+        return 1;
       }
 
-      // Try to parse as JSON for other gateways
-      let parsedIntent = null;
-      try {
-        parsedIntent =
-          typeof response.intent === "string"
-            ? JSON.parse(response.intent)
-            : response.intent;
-      } catch (e) {
-        // Not JSON, continue with string checks
+      // Cashfree
+      if (intent.paymentSessionId) {
+        return 2;
       }
 
-      if (parsedIntent) {
-        // Check for gateway-specific fields in intent
-        if (parsedIntent.key) {
-          const key = parsedIntent.key;
+      // Adyen
+      if (intent.sessionId && intent.sessionId.startsWith("CS")) {
+        return 3;
+      }
 
-          // Razorpay: key starts with rzp_test
-          if (key.startsWith("rzp_test")) {
-            return 1;
-          }
+      // Chargebee
+      if (intent.hostedPageId) {
+        return 4;
+      }
 
-          // Check against all gateway patterns
-          for (const [id, gateway] of Object.entries(GATEWAY_MAP)) {
-            for (const pattern of gateway.keyPatterns) {
-              if (key.includes(pattern)) {
-                return parseInt(id);
-              }
-            }
-          }
-        }
+      // Bennupay
+      if (intent.purchaseId) {
+        return 5;
+      }
 
-        // ChargeBee specific fields
-        if (
-          parsedIntent.chargebee_id ||
-          parsedIntent.cb_token ||
-          parsedIntent.chargebee_session
-        ) {
-          return 4;
-        }
+      // SabPaisa
+      if (intent.paymentId && intent.paymentId.startsWith("sppay_")) {
+        return 6;
+      }
 
-        // Bennupay specific fields
-        if (
-          parsedIntent.bennupay_token ||
-          parsedIntent.bp_session ||
-          parsedIntent.bennupay_id
-        ) {
-          return 5;
-        }
+      // Stripe
+      if (intent.sessionId && intent.sessionId.startsWith("cs_test_")) {
+        return 9;
+      }
 
-        // Cashfree specific fields
-        if (parsedIntent.paymentSessionId) {
-          return 2;
-        }
-
-        // Adyen specific fields
-        if (
-          parsedIntent.pspReference ||
-          (parsedIntent.sessionId && parsedIntent.sessionId.startsWith("CS"))
-        ) {
-          return 3;
-        }
+      // PayU
+      if (intent.txnid) {
+        return 10;
       }
     } catch (e) {
-      // Ignore parse errors
+      // Not JSON, continue
     }
   }
 
-  // 3. Check gatewayName field
-  if (response.gatewayName) {
-    const name = response.gatewayName.toUpperCase();
-    for (const [id, gateway] of Object.entries(GATEWAY_MAP)) {
-      if (name.includes(gateway.name.toUpperCase())) {
-        return parseInt(id);
-      }
-    }
-  }
-
-  // 4. Check paymentGateway field
-  if (response.paymentGateway) {
-    const name = response.paymentGateway.toUpperCase();
-    for (const [id, gateway] of Object.entries(GATEWAY_MAP)) {
-      if (name.includes(gateway.name.toUpperCase())) {
-        return parseInt(id);
-      }
-    }
+  // Fallback: check URL
+  if (response.url) {
+    const url = response.url.toLowerCase();
+    if (url.includes("rzp.io")) return 1;
+    if (url.includes("cashfree")) return 2;
+    if (url.includes("adyen")) return 3;
+    if (url.includes("chargebee")) return 4;
+    if (url.includes("bennupay")) return 5;
+    if (url.includes("sabpaisa")) return 6;
+    if (url.includes("stripe")) return 9;
+    if (url.includes("payu")) return 10;
   }
 
   return null;
@@ -152,19 +94,13 @@ function detectGatewayId(response) {
 
 /**
  * Get gateway name from ID
- * @param {number} gatewayId - Gateway ID
- * @returns {string} - Gateway name or 'Unknown'
  */
 function getGatewayName(gatewayId) {
   return GATEWAY_MAP[gatewayId]?.name || `Unknown (${gatewayId})`;
 }
 
 /**
- * Validate pay-in response
- * @param {object} response - Pay-in API response
- * @param {object} request - Request data
- * @param {number} expectedGatewayId - Expected gateway ID
- * @returns {object}
+ * ⭐ UPDATED: Validate pay-in response
  */
 function validatePayInResponse(response, request, expectedGatewayId) {
   const result = {
@@ -181,6 +117,7 @@ function validatePayInResponse(response, request, expectedGatewayId) {
     result.errors.push("Missing transaction ID");
   }
 
+  // ⭐ NEW: Status is "PROCESSING"
   if (!response.status) {
     result.valid = false;
     result.errors.push("Missing status");
@@ -199,14 +136,13 @@ function validatePayInResponse(response, request, expectedGatewayId) {
     );
   }
 
-  // Detect gateway
+  // Detect gateway from intent
   const detectedId = detectGatewayId(response);
   result.detectedGatewayId = detectedId;
   result.detectedGatewayName = detectedId
     ? getGatewayName(detectedId)
     : "Unknown";
 
-  // Check if gateway routing is correct
   if (detectedId && expectedGatewayId) {
     if (detectedId !== expectedGatewayId) {
       result.valid = false;
@@ -223,13 +159,22 @@ function validatePayInResponse(response, request, expectedGatewayId) {
     );
   }
 
+  // ⭐ NEW: Validate fee/tax fields
+  if (response.feeAmount !== undefined) {
+    result.warnings.push(`Fee Amount: ₹${response.feeAmount}`);
+  }
+  if (response.taxAmount !== undefined) {
+    result.warnings.push(`Tax Amount: ₹${response.taxAmount}`);
+  }
+  if (response.amountToCredit !== undefined) {
+    result.warnings.push(`Amount to Credit: ₹${response.amountToCredit}`);
+  }
+
   return result;
 }
 
 /**
  * Validate webhook response
- * @param {object} response - Webhook API response
- * @returns {object}
  */
 function validateWebhookResponse(response) {
   const result = {
@@ -243,7 +188,6 @@ function validateWebhookResponse(response) {
     return result;
   }
 
-  // Check for success or error
   if (response.error) {
     result.valid = false;
     result.errors.push(response.error);
@@ -254,7 +198,6 @@ function validateWebhookResponse(response) {
     result.errors.push("Webhook processing failed");
   }
 
-  // Check for gateway-specific webhook response
   if (response.message && response.message.includes("error")) {
     result.valid = false;
     result.errors.push(response.message);
@@ -265,26 +208,17 @@ function validateWebhookResponse(response) {
 
 /**
  * Check if routing is correct
- * @param {object} response - Pay-in response
- * @param {number} expectedGatewayId - Expected gateway ID
- * @returns {boolean}
  */
 function isRoutingCorrect(response, expectedGatewayId) {
   const detectedId = detectGatewayId(response);
-
-  // If we can't determine actual gateway, assume correct
   if (detectedId === null) {
     return true;
   }
-
   return detectedId === expectedGatewayId;
 }
 
 /**
  * Get detailed routing info
- * @param {object} response - Pay-in response
- * @param {number} expectedGatewayId - Expected gateway ID
- * @returns {object}
  */
 function getRoutingInfo(response, expectedGatewayId) {
   const detectedId = detectGatewayId(response);

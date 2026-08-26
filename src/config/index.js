@@ -13,6 +13,7 @@ module.exports = {
       BENNUPAY: "/api/webhooks/bennupay",
       STRIPE: "/api/webhooks/stripe",
       PAYU: "/api/webhooks/payu",
+      SABPAISA: "/api/webhooks/sabpaisa",
     },
   },
   TEST_CONFIG: {
@@ -20,7 +21,7 @@ module.exports = {
     MIN_AMOUNT: parseFloat(process.env.MIN_AMOUNT) || 1000,
     MAX_AMOUNT: parseFloat(process.env.MAX_AMOUNT) || 5000,
     PAYMENT_MODES: (
-      process.env.PAYMENT_MODES || "UPI,CARD,WALLET,NETBANKING"
+      process.env.PAYMENT_MODES || "UPI,CARD"
     ).split(","),
   },
   GATEWAY_IDS: {
@@ -29,6 +30,7 @@ module.exports = {
     ADYEN: 3,
     CHARGEBEE: 4,
     BENNUPAY: 5,
+    SABPAISA: 6,
     STRIPE: 9,
     PAYU: 10,
   },

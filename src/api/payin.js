@@ -12,50 +12,6 @@ const {
 const { logger, logSuccess, logError, logInfo } = require("../utils/logger");
 
 /**
- * Generate a random valid 16-digit card number
- */
-function generateRandomCardNumber() {
-  // Generate random 15 digits
-  let cardNumber = "";
-  for (let i = 0; i < 15; i++) {
-    cardNumber += Math.floor(Math.random() * 10);
-  }
-
-  // Calculate Luhn checksum for the 16th digit
-  let sum = 0;
-  let shouldDouble = true;
-
-  // Start from rightmost digit (excluding checksum)
-  for (let i = cardNumber.length - 1; i >= 0; i--) {
-    let digit = parseInt(cardNumber[i]);
-
-    if (shouldDouble) {
-      digit *= 2;
-      if (digit > 9) {
-        digit -= 9;
-      }
-    }
-    sum += digit;
-    shouldDouble = !shouldDouble;
-  }
-
-  const checksum = (10 - (sum % 10)) % 10;
-  return cardNumber + checksum;
-}
-
-function generateRandomExpiryMonth() {
-  return String(Math.floor(Math.random() * 12) + 1).padStart(2, "0");
-}
-
-function generateRandomExpiryYear() {
-  return String(2026 + Math.floor(Math.random() * 5));
-}
-
-function generateRandomCvv() {
-  return String(Math.floor(Math.random() * 900) + 100);
-}
-
-/**
  * Generate random merchant reference
  */
 function generateRandomMerchantReference() {
@@ -89,23 +45,18 @@ async function createPayIn(accessToken, clientSecret, options = {}) {
     const currency = options.currency || "INR";
     const paymentMode = options.paymentMode || randomPaymentMode();
 
+    // HOSTED CHECKOUT
     const payload = {
       amount,
       currency,
       merchantReference,
       paymentMode,
-      customer,
+      customer: {
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+      },
     };
-
-    if (paymentMode === "CARD") {
-      payload.card = {
-        cardNumber: options.cardNumber || generateRandomCardNumber(),
-        expiryMonth: options.expiryMonth || generateRandomExpiryMonth(),
-        expiryYear: options.expiryYear || generateRandomExpiryYear(),
-        cvv: options.cvv || generateRandomCvv(),
-        cardHolderName: options.cardHolderName || customer.name,
-      };
-    }
 
     logInfo(
       `Creating Pay-In: ${merchantReference} | ${paymentMode} | ₹${amount}`,
@@ -119,9 +70,10 @@ async function createPayIn(accessToken, clientSecret, options = {}) {
       },
     });
 
+    // status is "PROCESSING"
     if (response.data && response.data.id) {
       logSuccess(
-        `Pay-In created: ID ${response.data.id} | Status: ${response.data.status}`,
+        `Pay-In created: ID ${response.data.id} | Status: ${response.data.status} | URL: ${response.data.url || "N/A"}`,
       );
     }
 
