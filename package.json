@@ -5,8 +5,8 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
+    "test": "node src/auto-run.js",
     "format": "npx prettier --write \"src/**/*.js\"",
-    "test": "node src/index.js",
     "test:unified": "node -e \"require('./src/tests/unified-routing-test').testUnifiedRouting().then(() => process.exit(0)).catch(() => process.exit(1))\""
   },
   "dependencies": {
@@ -16,6 +16,7 @@
     "crypto": "^1.0.1",
     "dotenv": "^16.6.1",
     "express": "^5.2.1",
+    "node-cron": "^4.6.0",
     "pg": "^8.22.0",
     "winston": "^3.11.0"
   },

@@ -11,9 +11,9 @@ module.exports = {
       ADYEN: "/api/webhooks/adyen",
       CHARGEBEE: "/api/webhooks/chargebee",
       BENNUPAY: "/api/webhooks/bennupay",
+      SABPAISA: "/api/webhooks/sabpaisa",
       STRIPE: "/api/webhooks/stripe",
       PAYU: "/api/webhooks/payu",
-      SABPAISA: "/api/webhooks/sabpaisa",
     },
   },
   TEST_CONFIG: {

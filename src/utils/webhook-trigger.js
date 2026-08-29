@@ -396,6 +396,7 @@ function getWebhookPayload(
  * ⭐ UPDATED: Trigger webhook for a pay-in
  */
 async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
+  await new Promise((resolve) => setTimeout(resolve, 5000));
   const { request, response } = payInResult;
   const { merchantReference, paymentMode, customer } = request;
   const amount = request.amount;
@@ -434,8 +435,7 @@ async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
     BENNUPAY: config.API_PATHS.WEBHOOKS.BENNUPAY,
     SABPAISA: config.API_PATHS.WEBHOOKS.SABPAISA,
     STRIPE: config.API_PATHS.WEBHOOKS.STRIPE,
-    // PAYU: config.API_PATHS.WEBHOOKS.PAYU,
-    PAYU: "/webhooks/payu/success",
+    PAYU: config.API_PATHS.WEBHOOKS.PAYU,
   };
 
   const webhookUrl = `${config.BASE_URL}${webhookUrls[gateway]}`;
@@ -445,7 +445,7 @@ async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
   try {
     const webhookResponse = await axios.post(webhookUrl, webhookPayload, {
       headers: { "Content-Type": "application/json" },
-      timeout: 5000,
+      timeout: 15000,
     });
 
     logSuccess(`✅ ${gateway} webhook triggered successfully`);

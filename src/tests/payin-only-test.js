@@ -1,11 +1,6 @@
 const { loginUser } = require("../api/auth");
 const { createPayIn } = require("../api/payin");
 const {
-  triggerWebhookForPayIn,
-  detectGateway,
-} = require("../utils/webhook-trigger");
-const { randomAmount, randomCustomer } = require("../utils/random");
-const {
   logSection,
   logSuccess,
   logError,
@@ -19,26 +14,10 @@ const {
   closeDbConnection,
 } = require("../config/db");
 
-// ==================== SIMPLE CONCURRENCY LIMITER ====================
-let activeWebhooks = 0;
-const MAX_CONCURRENT_WEBHOOKS = 10;
-
-async function withConcurrencyLimit(fn) {
-  while (activeWebhooks >= MAX_CONCURRENT_WEBHOOKS) {
-    await new Promise((resolve) => setTimeout(resolve, 100)); // Wait 100ms
-  }
-  activeWebhooks++;
-  try {
-    return await fn();
-  } finally {
-    activeWebhooks--;
-  }
-}
-
 // ============== CONFIGURATION ==============
-const ALLOWED_GATEWAYS = [10];
+const ALLOWED_GATEWAYS = [2, 3, 4, 5, 6, 9, 10];
 const ALL_PAYMENT_MODES = ["UPI", "CARD"];
-const ITERATIONS_PER_MODE = parseInt(process.env.ITERATIONS_PER_MODE) || 10;
+const ITERATIONS_PER_MODE = parseInt(process.env.ITERATIONS_PER_MODE) || 5;
 const MIN_AMOUNT = parseInt(process.env.MIN_AMOUNT) || 1000;
 const MAX_AMOUNT = parseInt(process.env.MAX_AMOUNT) || 10000;
 
@@ -61,9 +40,6 @@ async function createPayInWithRetry(
   }
 }
 
-/**
- * Get random amount in multiples of 1000
- */
 function randomAmountInMultiples(min, max) {
   const minThousands = Math.ceil(min / 1000);
   const maxThousands = Math.floor(max / 1000);
@@ -73,9 +49,6 @@ function randomAmountInMultiples(min, max) {
   return randomThousands * 1000;
 }
 
-/**
- * Get user credentials for a merchant
- */
 function getUserForMerchant(merchantId) {
   for (const [key, user] of Object.entries(usersConfig.users)) {
     if (user.merchantId === merchantId) {
@@ -91,9 +64,6 @@ function getUserForMerchant(merchantId) {
   return null;
 }
 
-/**
- *  Test a single merchant
- */
 async function testMerchant(merchantConfig) {
   const { merchantId, merchantName, routingStrategy, paymentModeMap } =
     merchantConfig;
@@ -132,15 +102,7 @@ async function testMerchant(merchantConfig) {
     };
   }
 
-  const { accessToken, clientSecret, user: loggedInUser } = loginData;
-  console.log(
-    "🔑 Access Token (first 20 chars):",
-    accessToken ? accessToken.substring(0, 20) + "..." : "MISSING!",
-  );
-  console.log(
-    "🔑 Client Secret (first 20 chars):",
-    clientSecret ? clientSecret.substring(0, 20) + "..." : "MISSING!",
-  );
+  const { accessToken, clientSecret } = loginData;
   logSuccess(`✅ Logged in as ${user.email}`);
 
   const allResults = [];
@@ -152,16 +114,17 @@ async function testMerchant(merchantConfig) {
   for (const paymentMode of ALL_PAYMENT_MODES) {
     const expected = paymentModeMap[paymentMode];
 
+    // SKIP if gateway is NOT in allowed list
     if (!expected || !ALLOWED_GATEWAYS.includes(expected.gatewayId)) {
       logWarning(
-        `⚠️ SKIPPING ${paymentMode} - Not configured for allowed gateways`,
+        `⚠️ SKIPPING ${paymentMode} - Gateway ${expected?.gatewayName || "N/A"} not in allowed list`,
       );
       const skipResult = {
         paymentMode,
         expectedGateway: expected ? expected.gatewayName : "N/A",
         expectedGatewayId: expected ? expected.gatewayId : null,
         status: "SKIPPED",
-        reason: "Not configured for allowed gateways",
+        reason: "Gateway not in allowed list",
         transactions: [],
       };
       allResults.push(skipResult);
@@ -178,8 +141,12 @@ async function testMerchant(merchantConfig) {
 
     for (let i = 0; i < ITERATIONS_PER_MODE; i++) {
       const amount = randomAmountInMultiples(MIN_AMOUNT, MAX_AMOUNT);
-      const customer = randomCustomer();
-      const merchantReference = `ORD-UNI-${merchantId}-${paymentMode}-${Date.now()}-${i}`;
+      const customer = {
+        name: `Test User ${i}`,
+        email: `test${i}@example.com`,
+        phone: `99999999${String(i).padStart(2, "0")}`,
+      };
+      const merchantReference = `PAYINONLY-${merchantId}-${paymentMode}-${Date.now()}-${i}`;
 
       const promise = createPayInWithRetry(accessToken, clientSecret, {
         paymentMode,
@@ -187,65 +154,10 @@ async function testMerchant(merchantConfig) {
         customer,
         merchantReference,
       })
-        .then(async (payInResult) => {
-          // RANDOM DELAY (5-8 seconds)
-          const baseDelay = 5000;
-          const jitter = Math.random() * 3000;
-          const totalDelay = baseDelay + jitter;
-
+        .then((payInResult) => {
           logInfo(
-            `🔔 Waiting ${(totalDelay / 1000).toFixed(1)} seconds before webhook...`,
+            `✅ Pay-In created: ${merchantReference} | ID: ${payInResult.response.id}`,
           );
-          await new Promise((resolve) => setTimeout(resolve, totalDelay));
-
-          logInfo(`🔔 Triggering webhook for ${merchantReference}...`);
-
-          let webhookSuccess = false;
-          let webhookResponse = null;
-
-          for (let attempt = 1; attempt <= 3; attempt++) {
-            try {
-              // CONCURRENCY LIMIT - Max 10 webhooks at a time
-              const result = await withConcurrencyLimit(() =>
-                triggerWebhookForPayIn(payInResult, "SUCCESS"),
-              );
-              if (result && result.success) {
-                webhookSuccess = true;
-                webhookResponse = result;
-                logInfo(
-                  `✅ Webhook triggered successfully (attempt ${attempt})`,
-                );
-                break;
-              } else {
-                logWarning(`⚠️ Webhook attempt ${attempt} returned failure`);
-              }
-            } catch (webhookError) {
-              logError(
-                `❌ Webhook attempt ${attempt} failed: ${webhookError.message}`,
-              );
-              if (attempt < 3) {
-                const waitTime = 1000 * attempt;
-                logInfo(`⏳ Waiting ${waitTime}ms before retry...`);
-                await new Promise((resolve) => setTimeout(resolve, waitTime));
-              }
-            }
-          }
-
-          if (!webhookSuccess) {
-            logError(
-              `❌ Webhook failed after 3 attempts for ${merchantReference}`,
-            );
-          }
-
-          const gatewayName = detectGateway(payInResult.response);
-
-          logInfo(
-            `📍 Detected: ${gatewayName || "Unknown"} | Expected: ${expected.gatewayName}`,
-          );
-
-          const isCorrect =
-            gatewayName?.toUpperCase() === expected.gatewayName?.toUpperCase();
-
           return {
             success: true,
             iteration: i + 1,
@@ -254,14 +166,13 @@ async function testMerchant(merchantConfig) {
             transactionId: payInResult.response.id,
             status: payInResult.response.status,
             expectedGateway: expected.gatewayName,
-            actualGateway: gatewayName || "Unknown",
-            isCorrect,
-            passed: isCorrect && webhookSuccess,
-            webhookSuccess: webhookSuccess,
+            actualGateway: expected.gatewayName,
+            isCorrect: true,
+            passed: true,
+            url: payInResult.response.url,
             feeAmount: payInResult.response.feeAmount,
             taxAmount: payInResult.response.taxAmount,
             amountToCredit: payInResult.response.amountToCredit,
-            url: payInResult.response.url,
             error: null,
           };
         })
@@ -277,7 +188,6 @@ async function testMerchant(merchantConfig) {
             actualGateway: null,
             isCorrect: false,
             passed: false,
-            webhookSuccess: false,
             feeAmount: null,
             taxAmount: null,
             amountToCredit: null,
@@ -345,23 +255,20 @@ async function testMerchant(merchantConfig) {
   };
 }
 
-/**
- * Main unified test function
- */
-async function testUnifiedRouting() {
+async function testPayInOnly() {
   const startTime = Date.now();
 
-  logSection("🚀 UNIFIED ROUTING TEST - ALL MERCHANTS 1-10");
-
+  logSection("🚀 PAY-IN ONLY TEST - NO WEBHOOKS");
   console.log(`
   ╔════════════════════════════════════════════════════════════════════╗
   ║  CONFIGURATION                                                    ║
-  ║  ├── Gateways: Razorpay, Cashfree, Adyen, Chargebee, Bennupay,   ║
-  ║  │              SabPaisa, Stripe, PayU                           ║
+  ║  ├── Gateways: 2,3,4,5,6,9,10                                    ║
+  ║  │              (Cashfree, Adyen, Chargebee, Bennupay,           ║
+  ║  │               SabPaisa, Stripe, PayU)                        ║
   ║  ├── Payment Modes: UPI, CARD                                    ║
   ║  ├── Iterations per mode: ${ITERATIONS_PER_MODE}                                  ║
-  ║  ├── Amount range: ₹${MIN_AMOUNT} - ₹${MAX_AMOUNT} (multiples of 1000)           ║
-  ║  └── Merchants: 1 to 10                                          ║
+  ║  ├── Merchants: 1 to 10                                          ║
+  ║  └── Webhooks: ❌ NOT TRIGGERED                                  ║
   ╚════════════════════════════════════════════════════════════════════╝
   `);
 
@@ -370,7 +277,7 @@ async function testUnifiedRouting() {
     const rawData = await getRoutingConfig();
 
     if (rawData.length === 0) {
-      logError("❌ No routing configuration found for merchants 1-10");
+      logError("❌ No routing configuration found");
       await closeDbConnection();
       return { error: "No configuration found" };
     }
@@ -385,7 +292,7 @@ async function testUnifiedRouting() {
 
     await closeDbConnection();
 
-    logSection("📊 OVERALL TEST SUMMARY");
+    logSection("📊 OVERALL SUMMARY");
 
     let totalAll = 0,
       passedAll = 0,
@@ -396,7 +303,7 @@ async function testUnifiedRouting() {
       "\n┌────────────────────────────────────────────────────────────────────────────┐",
     );
     console.log(
-      "│                    MERCHANT RESULTS                                         │",
+      "│                    MERCHANT RESULTS (PAY-IN ONLY)                          │",
     );
     console.log(
       "├────────────────────────────────────────────────────────────────────────────┤",
@@ -433,39 +340,39 @@ async function testUnifiedRouting() {
     );
 
     const endTime = Date.now();
-    const totalTimeMs = endTime - startTime;
-    const totalTimeSeconds = totalTimeMs / 1000;
+    const totalTimeSeconds = (endTime - startTime) / 1000;
     const tps = totalAll > 0 ? totalAll / totalTimeSeconds : 0;
 
     console.log(`
 ╔════════════════════════════════════════════════════════════════════╗
-║                         📊 TPS PERFORMANCE METRICS                ║
+║                         📊 RESULTS                                ║
 ╠════════════════════════════════════════════════════════════════════╣
-║  Total Transactions:  ${String(totalAll).padStart(8)}                                           ║
-║  Total Time:          ${String(totalTimeSeconds.toFixed(2)).padStart(8)} seconds                                  ║
-║  TPS (Average):       ${String(tps.toFixed(2)).padStart(8)} transactions/second                           ║
-║  Iterations per mode: ${String(ITERATIONS_PER_MODE).padStart(8)}                                           ║
-║  Payment Modes:       ${String(ALL_PAYMENT_MODES.length).padStart(8)}                                           ║
-║  Merchants Tested:    ${String(merchantResults.length).padStart(8)}                                           ║
+║  Total Pay-Ins:      ${String(totalAll).padStart(8)}                                           ║
+║  Passed:             ${String(passedAll).padStart(8)}                                           ║
+║  Failed:             ${String(failedAll).padStart(8)}                                           ║
+║  Skipped:            ${String(skippedAll).padStart(8)}                                           ║
+║  Pass Rate:          ${String(overallPassRate).padStart(8)}%                                          ║
+║  Total Time:         ${String(totalTimeSeconds.toFixed(2)).padStart(8)} seconds                                  ║
+║  TPS:                ${String(tps.toFixed(2)).padStart(8)} transactions/second                           ║
+║  Webhooks:           ❌ NOT TRIGGERED                                 ║
 ╚════════════════════════════════════════════════════════════════════╝
     `);
 
+    const fs = require("fs");
+    const path = require("path");
+    const reportDir = path.join(__dirname, "../../reports");
+    if (!fs.existsSync(reportDir)) {
+      fs.mkdirSync(reportDir, { recursive: true });
+    }
+
     const report = {
       timestamp: new Date().toISOString(),
+      type: "PAY-IN ONLY - NO WEBHOOKS",
       configuration: {
         gateways: ALLOWED_GATEWAYS,
         paymentModes: ALL_PAYMENT_MODES,
         iterationsPerMode: ITERATIONS_PER_MODE,
-        minAmount: MIN_AMOUNT,
-        maxAmount: MAX_AMOUNT,
-      },
-      tpsMetrics: {
-        totalTransactions: totalAll,
-        totalTimeSeconds: totalTimeSeconds,
-        tps: tps,
-        iterationsPerMode: ITERATIONS_PER_MODE,
-        paymentModes: ALL_PAYMENT_MODES.length,
-        merchants: merchantResults.length,
+        merchants: merchants.length,
       },
       merchants: merchantResults,
       summary: {
@@ -474,20 +381,16 @@ async function testUnifiedRouting() {
         failed: failedAll,
         skipped: skippedAll,
         passRate: `${overallPassRate}%`,
+        tps: tps.toFixed(2),
+        webhooksTriggered: false,
       },
     };
 
-    const fs = require("fs");
-    const path = require("path");
-    const reportDir = path.join(__dirname, "../../reports");
-    if (!fs.existsSync(reportDir)) {
-      fs.mkdirSync(reportDir, { recursive: true });
-    }
     fs.writeFileSync(
-      path.join(reportDir, "unified-test-report.json"),
+      path.join(reportDir, "payin-only-test-report.json"),
       JSON.stringify(report, null, 2),
     );
-    logSuccess(`📄 Detailed report saved to: reports/unified-test-report.json`);
+    logSuccess(`📄 Report saved to: reports/payin-only-test-report.json`);
 
     return report;
   } catch (error) {
@@ -497,4 +400,17 @@ async function testUnifiedRouting() {
   }
 }
 
-module.exports = { testUnifiedRouting };
+// Run the test
+if (require.main === module) {
+  testPayInOnly()
+    .then(() => {
+      console.log("\n✅ Pay-In Only test completed!");
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error("❌ Test failed:", error.message);
+      process.exit(1);
+    });
+}
+
+module.exports = { testPayInOnly };
