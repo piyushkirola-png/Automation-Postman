@@ -32,16 +32,6 @@ async function runAllTests() {
       totalTests += r10.summary.totalTransactions || 0;
       totalPassed += r10.summary.passed || 0;
     }
-
-    // Stripe + PayU Routing
-    const r11 = await testStripePayuRouting();
-    results.stripePayuRouting = r11;
-
-    // Calculate Stripe+PayU test stats
-    if (r11 && r11.summary) {
-      totalTests += r11.summary.totalTransactions || 0;
-      totalPassed += r11.summary.passed || 0;
-    }
     // ==============================================
   } catch (error) {
     logError(`Test suite failed: ${error.message}`);

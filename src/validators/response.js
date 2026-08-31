@@ -6,7 +6,7 @@ const {
   logWarning,
 } = require("../utils/logger");
 
-// ⭐ UPDATED GATEWAY MAP with SabPaisa
+// UPDATED GATEWAY MAP with SabPaisa
 const GATEWAY_MAP = {
   1: { id: 1, name: "Razorpay", keyPatterns: ["rzp_test"] },
   2: { id: 2, name: "Cashfree", keyPatterns: ["cashfree", "cf_"] },
@@ -19,7 +19,7 @@ const GATEWAY_MAP = {
 };
 
 /**
- * ⭐ NEW: Detect gateway ID from intent JSON
+ * Detect gateway ID from intent JSON
  */
 function detectGatewayId(response) {
   if (!response) return null;
@@ -100,7 +100,7 @@ function getGatewayName(gatewayId) {
 }
 
 /**
- * ⭐ UPDATED: Validate pay-in response
+ * Validate pay-in response
  */
 function validatePayInResponse(response, request, expectedGatewayId) {
   const result = {
@@ -117,7 +117,7 @@ function validatePayInResponse(response, request, expectedGatewayId) {
     result.errors.push("Missing transaction ID");
   }
 
-  // ⭐ NEW: Status is "PROCESSING"
+  // Status is "PROCESSING"
   if (!response.status) {
     result.valid = false;
     result.errors.push("Missing status");
@@ -159,7 +159,7 @@ function validatePayInResponse(response, request, expectedGatewayId) {
     );
   }
 
-  // ⭐ NEW: Validate fee/tax fields
+  // Validate fee/tax fields
   if (response.feeAmount !== undefined) {
     result.warnings.push(`Fee Amount: ₹${response.feeAmount}`);
   }

@@ -1,10 +1,9 @@
-// utils/webhook-trigger.js
 const axios = require("axios");
 const config = require("../config");
 const { logInfo, logSuccess, logError } = require("./logger");
 
 /**
- * ⭐ NEW: Detect gateway from intent JSON
+ * Detect gateway from intent JSON
  */
 function detectGateway(response) {
   if (!response) return null;
@@ -80,7 +79,7 @@ function detectGateway(response) {
 }
 
 /**
- * ⭐ NEW: Get webhook payload for specific gateway (matching current backend)
+ * Get webhook payload for specific gateway
  */
 function getWebhookPayload(
   gateway,
@@ -393,7 +392,7 @@ function getWebhookPayload(
 }
 
 /**
- * ⭐ UPDATED: Trigger webhook for a pay-in
+ * Trigger webhook for a pay-in
  */
 async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
   await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -401,7 +400,7 @@ async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
   const { merchantReference, paymentMode, customer } = request;
   const amount = request.amount;
 
-  // ⭐ Detect gateway from intent
+  // Detect gateway from intent
   const gateway = detectGateway(response);
 
   if (!gateway) {

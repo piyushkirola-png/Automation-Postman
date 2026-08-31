@@ -101,7 +101,7 @@ function buildMerchantConfig(rawData) {
 
     const merchant = merchantMap.get(merchantId);
 
-    // Parse paymentModes (it's stored as JSON array like {UPI} or ["UPI"])
+    // Parse paymentModes
     let modes = [];
     try {
       if (typeof paymentModes === "string") {
@@ -128,20 +128,25 @@ function buildMerchantConfig(rawData) {
 
     merchant.gateways.push(gatewayEntry);
 
-    // Build payment mode map (highest priority for each mode)
+    // Har payment mode ke liye array mein push karo
     for (const mode of modes) {
-      if (
-        !merchant.paymentModeMap[mode] ||
-        priority < merchant.paymentModeMap[mode].priority
-      ) {
-        merchant.paymentModeMap[mode] = {
-          gatewayId,
-          gatewayName,
-          priority,
-          enableFailover,
-          maxRetries,
-        };
+      if (!merchant.paymentModeMap[mode]) {
+        merchant.paymentModeMap[mode] = [];
       }
+      merchant.paymentModeMap[mode].push({
+        gatewayId,
+        gatewayName,
+        priority,
+        enableFailover,
+        maxRetries,
+      });
+    }
+  }
+
+  // Har payment mode ke gateways ko priority se sort karo
+  for (const merchant of merchantMap.values()) {
+    for (const mode in merchant.paymentModeMap) {
+      merchant.paymentModeMap[mode].sort((a, b) => a.priority - b.priority);
     }
   }
 
@@ -150,7 +155,7 @@ function buildMerchantConfig(rawData) {
 
 /**
  * Close database connection
- * ✅ FIXED: Properly closes all connections
+ * Properly closes all connections
  */
 async function closeDbConnection() {
   await pool.end();

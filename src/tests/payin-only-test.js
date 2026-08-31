@@ -112,19 +112,20 @@ async function testMerchant(merchantConfig) {
     skipped = 0;
 
   for (const paymentMode of ALL_PAYMENT_MODES) {
-    const expected = paymentModeMap[paymentMode];
+    const allGateways = paymentModeMap[paymentMode] || [];
 
-    // SKIP if gateway is NOT in allowed list
-    if (!expected || !ALLOWED_GATEWAYS.includes(expected.gatewayId)) {
-      logWarning(
-        `⚠️ SKIPPING ${paymentMode} - Gateway ${expected?.gatewayName || "N/A"} not in allowed list`,
-      );
+    const selectedGateway = allGateways.find((g) =>
+      ALLOWED_GATEWAYS.includes(g.gatewayId),
+    );
+
+    if (!selectedGateway) {
+      logWarning(`⚠️ SKIPPING ${paymentMode} - No allowed gateway found`);
       const skipResult = {
         paymentMode,
-        expectedGateway: expected ? expected.gatewayName : "N/A",
-        expectedGatewayId: expected ? expected.gatewayId : null,
+        expectedGateway: "N/A",
+        expectedGatewayId: null,
         status: "SKIPPED",
-        reason: "Gateway not in allowed list",
+        reason: "No allowed gateway found",
         transactions: [],
       };
       allResults.push(skipResult);
@@ -133,7 +134,7 @@ async function testMerchant(merchantConfig) {
     }
 
     logInfo(
-      `\n🔍 Testing ${paymentMode} → Expected: ${expected.gatewayName} (Priority ${expected.priority})`,
+      `\n🔍 Testing ${paymentMode} → Expected: ${selectedGateway.gatewayName} (Priority ${selectedGateway.priority})`,
     );
 
     const modeResults = [];
@@ -165,8 +166,8 @@ async function testMerchant(merchantConfig) {
             merchantReference,
             transactionId: payInResult.response.id,
             status: payInResult.response.status,
-            expectedGateway: expected.gatewayName,
-            actualGateway: expected.gatewayName,
+            expectedGateway: selectedGateway.gatewayName,
+            actualGateway: selectedGateway.gatewayName,
             isCorrect: true,
             passed: true,
             url: payInResult.response.url,
@@ -184,7 +185,7 @@ async function testMerchant(merchantConfig) {
             merchantReference,
             transactionId: null,
             status: null,
-            expectedGateway: expected.gatewayName,
+            expectedGateway: selectedGateway.gatewayName,
             actualGateway: null,
             isCorrect: false,
             passed: false,
@@ -231,9 +232,9 @@ async function testMerchant(merchantConfig) {
 
     allResults.push({
       paymentMode,
-      expectedGateway: expected.gatewayName,
-      expectedGatewayId: expected.gatewayId,
-      priority: expected.priority,
+      expectedGateway: selectedGateway.gatewayName,
+      expectedGatewayId: selectedGateway.gatewayId,
+      priority: selectedGateway.priority,
       status: modeFailed === 0 ? "PASSED" : "FAILED",
       transactions: modeResults,
     });

@@ -1,4 +1,3 @@
-// International Names
 const firstNames = [
   "John",
   "Emma",
@@ -135,7 +134,7 @@ const countryCodes = [
   "+65",
 ];
 
-const paymentModes = ["UPI", "CARD", "WALLET", "NETBANKING"];
+const paymentModes = ["UPI", "CARD"];
 
 function random(arr) {
   return arr[Math.floor(Math.random() * arr.length)];

@@ -36,7 +36,7 @@ async function withConcurrencyLimit(fn) {
 }
 
 // ============== CONFIGURATION ==============
-const ALLOWED_GATEWAYS = [10];
+const ALLOWED_GATEWAYS = [2, 3, 4, 5, 6, 9, 10];
 const ALL_PAYMENT_MODES = ["UPI", "CARD"];
 const ITERATIONS_PER_MODE = parseInt(process.env.ITERATIONS_PER_MODE) || 10;
 const MIN_AMOUNT = parseInt(process.env.MIN_AMOUNT) || 1000;
@@ -150,18 +150,20 @@ async function testMerchant(merchantConfig) {
     skipped = 0;
 
   for (const paymentMode of ALL_PAYMENT_MODES) {
-    const expected = paymentModeMap[paymentMode];
+    const allGateways = paymentModeMap[paymentMode] || [];
 
-    if (!expected || !ALLOWED_GATEWAYS.includes(expected.gatewayId)) {
-      logWarning(
-        `⚠️ SKIPPING ${paymentMode} - Not configured for allowed gateways`,
-      );
+    const selectedGateway = allGateways.find((g) =>
+      ALLOWED_GATEWAYS.includes(g.gatewayId),
+    );
+
+    if (!selectedGateway) {
+      logWarning(`⚠️ SKIPPING ${paymentMode} - No allowed gateway found`);
       const skipResult = {
         paymentMode,
-        expectedGateway: expected ? expected.gatewayName : "N/A",
-        expectedGatewayId: expected ? expected.gatewayId : null,
+        expectedGateway: "N/A",
+        expectedGatewayId: null,
         status: "SKIPPED",
-        reason: "Not configured for allowed gateways",
+        reason: "No allowed gateway found",
         transactions: [],
       };
       allResults.push(skipResult);
@@ -170,7 +172,7 @@ async function testMerchant(merchantConfig) {
     }
 
     logInfo(
-      `\n🔍 Testing ${paymentMode} → Expected: ${expected.gatewayName} (Priority ${expected.priority})`,
+      `\n🔍 Testing ${paymentMode} → Expected: ${selectedGateway.gatewayName} (Priority ${selectedGateway.priority})`,
     );
 
     const modeResults = [];
@@ -188,15 +190,8 @@ async function testMerchant(merchantConfig) {
         merchantReference,
       })
         .then(async (payInResult) => {
-          // RANDOM DELAY (5-8 seconds)
-          const baseDelay = 5000;
-          const jitter = Math.random() * 3000;
-          const totalDelay = baseDelay + jitter;
-
-          logInfo(
-            `🔔 Waiting ${(totalDelay / 1000).toFixed(1)} seconds before webhook...`,
-          );
-          await new Promise((resolve) => setTimeout(resolve, totalDelay));
+          logInfo(`🔔 Waiting 5 seconds before webhook...`);
+          await new Promise((resolve) => setTimeout(resolve, 5000));
 
           logInfo(`🔔 Triggering webhook for ${merchantReference}...`);
 
@@ -205,9 +200,9 @@ async function testMerchant(merchantConfig) {
 
           for (let attempt = 1; attempt <= 3; attempt++) {
             try {
-              // CONCURRENCY LIMIT - Max 10 webhooks at a time
-              const result = await withConcurrencyLimit(() =>
-                triggerWebhookForPayIn(payInResult, "SUCCESS"),
+              const result = await triggerWebhookForPayIn(
+                payInResult,
+                "SUCCESS",
               );
               if (result && result.success) {
                 webhookSuccess = true;
@@ -240,11 +235,12 @@ async function testMerchant(merchantConfig) {
           const gatewayName = detectGateway(payInResult.response);
 
           logInfo(
-            `📍 Detected: ${gatewayName || "Unknown"} | Expected: ${expected.gatewayName}`,
+            `📍 Detected: ${gatewayName || "Unknown"} | Expected: ${selectedGateway.gatewayName}`,
           );
 
           const isCorrect =
-            gatewayName?.toUpperCase() === expected.gatewayName?.toUpperCase();
+            gatewayName?.toUpperCase() ===
+            selectedGateway.gatewayName?.toUpperCase();
 
           return {
             success: true,
@@ -253,7 +249,7 @@ async function testMerchant(merchantConfig) {
             merchantReference,
             transactionId: payInResult.response.id,
             status: payInResult.response.status,
-            expectedGateway: expected.gatewayName,
+            expectedGateway: selectedGateway.gatewayName,
             actualGateway: gatewayName || "Unknown",
             isCorrect,
             passed: isCorrect && webhookSuccess,
@@ -273,7 +269,7 @@ async function testMerchant(merchantConfig) {
             merchantReference,
             transactionId: null,
             status: null,
-            expectedGateway: expected.gatewayName,
+            expectedGateway: selectedGateway.gatewayName,
             actualGateway: null,
             isCorrect: false,
             passed: false,
@@ -321,9 +317,9 @@ async function testMerchant(merchantConfig) {
 
     allResults.push({
       paymentMode,
-      expectedGateway: expected.gatewayName,
-      expectedGatewayId: expected.gatewayId,
-      priority: expected.priority,
+      expectedGateway: selectedGateway.gatewayName,
+      expectedGatewayId: selectedGateway.gatewayId,
+      priority: selectedGateway.priority,
       status: modeFailed === 0 ? "PASSED" : "FAILED",
       transactions: modeResults,
     });
