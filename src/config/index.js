@@ -14,15 +14,18 @@ module.exports = {
       SABPAISA: "/api/webhooks/sabpaisa",
       STRIPE: "/api/webhooks/stripe",
       PAYU: "/api/webhooks/payu",
+      CHILLPAY: "/api/webhooks/chillpay",
+      SETU: "/api/webhooks/setu",
+      PAYSTACK: "/api/webhooks/paystack",
+      MOLLIE: "/api/webhooks/mollie",
+      FLUTTERWAVE: "/api/webhooks/flutterwave",
     },
   },
   TEST_CONFIG: {
     TRANSACTIONS_PER_USER: parseInt(process.env.TRANSACTIONS_PER_USER),
     MIN_AMOUNT: parseFloat(process.env.MIN_AMOUNT) || 1000,
     MAX_AMOUNT: parseFloat(process.env.MAX_AMOUNT) || 5000,
-    PAYMENT_MODES: (
-      process.env.PAYMENT_MODES || "UPI,CARD"
-    ).split(","),
+    PAYMENT_MODES: (process.env.PAYMENT_MODES || "UPI,CARD").split(","),
   },
   GATEWAY_IDS: {
     RAZORPAY: 1,
@@ -31,7 +34,13 @@ module.exports = {
     CHARGEBEE: 4,
     BENNUPAY: 5,
     SABPAISA: 6,
+    CHILLPAY: 7,
+    SETU: 8,
     STRIPE: 9,
     PAYU: 10,
+    PAYSTACK: 12,
+    MOLLIE: 14,
+    FLUTTERWAVE: 15,
   },
+
 };

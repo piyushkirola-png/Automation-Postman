@@ -1,0 +1,68 @@
+
+============================================================
+BURST TEST #5 - 9/4/2026, 10:10:56 AM
+============================================================
+
+Total Transactions Attempted:  100
+
+--- PHASE 1: Pay-In Burst ---
+Succeeded:            100
+Failed:               0
+Time Taken:           3.06s
+Effective TPS:        32.72
+Response Time (ms):   min=2202 max=3051 avg=2770 p95=3014
+
+--- PHASE 2: Webhook Burst ---
+Succeeded:            100
+Failed:               0
+Time Taken:           2.11s
+Effective TPS:        47.39
+Response Time (ms):   min=102 max=517 avg=265 p95=431
+
+--- DB STATUS (records with id > 138338) ---
+Success:              0
+Failed:               0
+Pending:              0
+Total New Records:    0
+
+--- WALLET RACE CONDITION CHECK ---
+Inconsistent Rows:    0
+✅ No race conditions detected in wallet ledger
+
+Total Wall Time:      5.43s
+============================================================
+
+
+============================================================
+BURST TEST #6 - 9/4/2026, 10:13:25 AM
+============================================================
+
+Total Transactions Attempted:  1000
+
+--- PHASE 1: Pay-In Burst ---
+Succeeded:            1000
+Failed:               0
+Time Taken:           15.52s
+Effective TPS:        64.42
+Response Time (ms):   min=3331 max=15423 avg=11098 p95=14615
+
+--- PHASE 2: Webhook Burst ---
+Succeeded:            1000
+Failed:               0
+Time Taken:           21.72s
+Effective TPS:        46.04
+Response Time (ms):   min=81 max=554 avg=273 p95=446
+
+--- DB STATUS (records with id > 138338) ---
+Success:              0
+Failed:               0
+Pending:              0
+Total New Records:    0
+
+--- WALLET RACE CONDITION CHECK ---
+Inconsistent Rows:    0
+✅ No race conditions detected in wallet ledger
+
+Total Wall Time:      37.52s
+============================================================
+

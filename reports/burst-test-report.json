@@ -1,0 +1,56 @@
+{
+  "timestamp": "2026-09-04T04:43:25.110Z",
+  "type": "BURST LOAD TEST (WORST-CASE SIMULTANEOUS SPIKE)",
+  "user": "snehamehta@gmail.com",
+  "testCounter": 6,
+  "lastMaxId": 138338,
+  "currentMaxId": 138338,
+  "configuration": {
+    "totalTransactions": 1000,
+    "paymentModes": [
+      "UPI",
+      "CARD"
+    ],
+    "minAmount": 100,
+    "maxAmount": 1000,
+    "payInBurstConcurrency": 1000,
+    "webhookBurstConcurrency": 20
+  },
+  "phase1_payins": {
+    "attempted": 1000,
+    "succeeded": 1000,
+    "failed": 0,
+    "timeSeconds": 15.523,
+    "effectiveTps": 64.4205372672808,
+    "responseTimeStats": {
+      "min": 3331,
+      "max": 15423,
+      "avg": 11098,
+      "p95": 14615
+    },
+    "failures": []
+  },
+  "phase2_webhooks": {
+    "attempted": 1000,
+    "succeeded": 1000,
+    "failed": 0,
+    "timeSeconds": 21.722,
+    "effectiveTps": 46.03627658594973,
+    "responseTimeStats": {
+      "min": 81,
+      "max": 554,
+      "avg": 273,
+      "p95": 446
+    },
+    "failures": []
+  },
+  "dbStatusCounts": {
+    "SUCCESS": 0,
+    "FAILED": 0,
+    "PENDING": 0,
+    "PROCESSING": 0,
+    "total": 0
+  },
+  "raceConditionsDetected": 0,
+  "totalTimeSeconds": 37.516
+}

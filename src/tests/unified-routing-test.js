@@ -25,7 +25,7 @@ const MAX_CONCURRENT_WEBHOOKS = 10;
 
 async function withConcurrencyLimit(fn) {
   while (activeWebhooks >= MAX_CONCURRENT_WEBHOOKS) {
-    await new Promise((resolve) => setTimeout(resolve, 100)); // Wait 100ms
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
   activeWebhooks++;
   try {
@@ -36,11 +36,33 @@ async function withConcurrencyLimit(fn) {
 }
 
 // ============== CONFIGURATION ==============
-const ALLOWED_GATEWAYS = [2, 3, 4, 5, 6, 9, 10];
+const ALLOWED_GATEWAYS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15];
 const ALL_PAYMENT_MODES = ["UPI", "CARD"];
 const ITERATIONS_PER_MODE = parseInt(process.env.ITERATIONS_PER_MODE) || 10;
 const MIN_AMOUNT = parseInt(process.env.MIN_AMOUNT) || 1000;
 const MAX_AMOUNT = parseInt(process.env.MAX_AMOUNT) || 10000;
+
+// ============== REALISTIC DELAY CONFIGURATION ==============
+const DELAY_BETWEEN_PAYINS_MIN =
+  parseInt(process.env.DELAY_BETWEEN_PAYINS_MIN) || 500;
+const DELAY_BETWEEN_PAYINS_MAX =
+  parseInt(process.env.DELAY_BETWEEN_PAYINS_MAX) || 3000;
+const CUSTOMER_PAYMENT_MIN = parseInt(process.env.CUSTOMER_PAYMENT_MIN) || 5000;
+const CUSTOMER_PAYMENT_MAX =
+  parseInt(process.env.CUSTOMER_PAYMENT_MAX) || 60000;
+const GATEWAY_WEBHOOK_MIN = parseInt(process.env.GATEWAY_WEBHOOK_MIN) || 1000;
+const GATEWAY_WEBHOOK_MAX = parseInt(process.env.GATEWAY_WEBHOOK_MAX) || 10000;
+
+// ============== HELPER FUNCTIONS ==============
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+async function randomDelay(min, max) {
+  const delay = randomInt(min, max);
+  await new Promise((resolve) => setTimeout(resolve, delay));
+  return delay;
+}
 
 // Retry function for API calls
 async function createPayInWithRetry(
@@ -92,7 +114,7 @@ function getUserForMerchant(merchantId) {
 }
 
 /**
- *  Test a single merchant
+ * Test a single merchant
  */
 async function testMerchant(merchantConfig) {
   const { merchantId, merchantName, routingStrategy, paymentModeMap } =
@@ -179,6 +201,15 @@ async function testMerchant(merchantConfig) {
     const promises = [];
 
     for (let i = 0; i < ITERATIONS_PER_MODE; i++) {
+      // ========== REALISTIC: Random delay between pay-in creations ==========
+      if (i > 0) {
+        const delayMs = await randomDelay(
+          DELAY_BETWEEN_PAYINS_MIN,
+          DELAY_BETWEEN_PAYINS_MAX,
+        );
+        logInfo(`⏳ Waiting ${delayMs}ms before next pay-in creation...`);
+      }
+
       const amount = randomAmountInMultiples(MIN_AMOUNT, MAX_AMOUNT);
       const customer = randomCustomer();
       const merchantReference = `ORD-UNI-${merchantId}-${paymentMode}-${Date.now()}-${i}`;
@@ -190,8 +221,15 @@ async function testMerchant(merchantConfig) {
         merchantReference,
       })
         .then(async (payInResult) => {
-          logInfo(`🔔 Waiting 5 seconds before webhook...`);
-          await new Promise((resolve) => setTimeout(resolve, 5000));
+          // ========== REALISTIC: Customer takes time to pay (5-60 seconds) ==========
+          const customerDelay = await randomDelay(
+            CUSTOMER_PAYMENT_MIN,
+            CUSTOMER_PAYMENT_MAX,
+          );
+          logInfo(`👤 Customer took ${customerDelay}ms to complete payment...`);
+
+          // ========== REALISTIC: Gateway takes time to send webhook (1-10 seconds) ==========
+          // This delay is now inside triggerWebhookForPayIn
 
           logInfo(`🔔 Triggering webhook for ${merchantReference}...`);
 
@@ -200,9 +238,12 @@ async function testMerchant(merchantConfig) {
 
           for (let attempt = 1; attempt <= 3; attempt++) {
             try {
+              // Pass the gateway delay parameters to triggerWebhookForPayIn
               const result = await triggerWebhookForPayIn(
                 payInResult,
                 "SUCCESS",
+                GATEWAY_WEBHOOK_MIN,
+                GATEWAY_WEBHOOK_MAX,
               );
               if (result && result.success) {
                 webhookSuccess = true;
@@ -254,6 +295,8 @@ async function testMerchant(merchantConfig) {
             isCorrect,
             passed: isCorrect && webhookSuccess,
             webhookSuccess: webhookSuccess,
+            customerDelay: customerDelay,
+            gatewayDelay: 0, // Will be filled later
             feeAmount: payInResult.response.feeAmount,
             taxAmount: payInResult.response.taxAmount,
             amountToCredit: payInResult.response.amountToCredit,
@@ -274,6 +317,8 @@ async function testMerchant(merchantConfig) {
             isCorrect: false,
             passed: false,
             webhookSuccess: false,
+            customerDelay: 0,
+            gatewayDelay: 0,
             feeAmount: null,
             taxAmount: null,
             amountToCredit: null,
@@ -285,6 +330,7 @@ async function testMerchant(merchantConfig) {
       promises.push(promise);
     }
 
+    // ========== Wait for all promises in this payment mode ==========
     const results = await Promise.all(promises);
 
     let modePassed = 0,
@@ -347,17 +393,21 @@ async function testMerchant(merchantConfig) {
 async function testUnifiedRouting() {
   const startTime = Date.now();
 
-  logSection("🚀 UNIFIED ROUTING TEST - ALL MERCHANTS 1-10");
+  logSection("🚀 UNIFIED ROUTING TEST - ALL MERCHANTS 1-15 (REALISTIC MODE)");
 
   console.log(`
   ╔════════════════════════════════════════════════════════════════════╗
-  ║  CONFIGURATION                                                    ║
+  ║  CONFIGURATION (REALISTIC)                                        ║
   ║  ├── Gateways: Razorpay, Cashfree, Adyen, Chargebee, Bennupay,   ║
   ║  │              SabPaisa, Stripe, PayU                           ║
   ║  ├── Payment Modes: UPI, CARD                                    ║
   ║  ├── Iterations per mode: ${ITERATIONS_PER_MODE}                                  ║
   ║  ├── Amount range: ₹${MIN_AMOUNT} - ₹${MAX_AMOUNT} (multiples of 1000)           ║
-  ║  └── Merchants: 1 to 10                                          ║
+  ║  ├── Merchants: 1 to 15                                          ║
+  ║  ├── Delay between pay-ins: ${DELAY_BETWEEN_PAYINS_MIN}-${DELAY_BETWEEN_PAYINS_MAX}ms          ║
+  ║  ├── Customer payment time: ${CUSTOMER_PAYMENT_MIN / 1000}-${CUSTOMER_PAYMENT_MAX / 1000}s        ║
+  ║  ├── Gateway webhook delay: ${GATEWAY_WEBHOOK_MIN / 1000}-${GATEWAY_WEBHOOK_MAX / 1000}s        ║
+  ║  └── Max concurrent webhooks: ${MAX_CONCURRENT_WEBHOOKS}                                   ║
   ╚════════════════════════════════════════════════════════════════════╝
   `);
 
@@ -366,7 +416,7 @@ async function testUnifiedRouting() {
     const rawData = await getRoutingConfig();
 
     if (rawData.length === 0) {
-      logError("❌ No routing configuration found for merchants 1-10");
+      logError("❌ No routing configuration found for merchants 1-15");
       await closeDbConnection();
       return { error: "No configuration found" };
     }
@@ -454,6 +504,12 @@ async function testUnifiedRouting() {
         iterationsPerMode: ITERATIONS_PER_MODE,
         minAmount: MIN_AMOUNT,
         maxAmount: MAX_AMOUNT,
+        realisticDelays: {
+          delayBetweenPayins: `${DELAY_BETWEEN_PAYINS_MIN}-${DELAY_BETWEEN_PAYINS_MAX}ms`,
+          customerPayment: `${CUSTOMER_PAYMENT_MIN / 1000}-${CUSTOMER_PAYMENT_MAX / 1000}s`,
+          gatewayWebhook: `${GATEWAY_WEBHOOK_MIN / 1000}-${GATEWAY_WEBHOOK_MAX / 1000}s`,
+          maxConcurrentWebhooks: MAX_CONCURRENT_WEBHOOKS,
+        },
       },
       tpsMetrics: {
         totalTransactions: totalAll,

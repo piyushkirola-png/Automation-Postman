@@ -6,7 +6,11 @@
   "scripts": {
     "start": "node src/index.js",
     "test": "node src/auto-run.js",
+    "fast": "node src/tests/simple-payin-webhook-test.js",
+    "payin": "node src/tests/single-payin.js",
     "format": "npx prettier --write \"src/**/*.js\"",
+    "test:risk": "node src/tests/test-risk-blocks.js",
+    "burst": "node src/tests/burst-test.js",
     "test:unified": "node -e \"require('./src/tests/unified-routing-test').testUnifiedRouting().then(() => process.exit(0)).catch(() => process.exit(1))\""
   },
   "dependencies": {

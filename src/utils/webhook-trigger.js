@@ -2,6 +2,17 @@ const axios = require("axios");
 const config = require("../config");
 const { logInfo, logSuccess, logError } = require("./logger");
 
+// ============== HELPER FUNCTIONS ==============
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+async function randomDelay(min, max) {
+  const delay = randomInt(min, max);
+  await new Promise((resolve) => setTimeout(resolve, delay));
+  return delay;
+}
+
 /**
  * Detect gateway from intent JSON
  */
@@ -57,6 +68,31 @@ function detectGateway(response) {
       if (intent.txnid) {
         return "PAYU";
       }
+
+      // CHILLPAY
+      if (intent.payLinkId || intent.payLinkToken || intent.PayLinkToken) {
+        return "CHILLPAY";
+      }
+
+      // SETU - check URL
+      if (response.url && response.url.includes("kaypay")) {
+        return "SETU";
+      }
+
+      // PAYSTACK
+      if (intent.accessCode || intent.reference) {
+        return "PAYSTACK";
+      }
+
+      // MOLLIE
+      if (intent.paymentId && intent.paymentId.startsWith("tr_")) {
+        return "MOLLIE";
+      }
+
+      // FLUTTERWAVE
+      if (intent.tx_ref || intent.checkoutUrl?.includes("flutterwave")) {
+        return "FLUTTERWAVE";
+      }
     } catch (e) {
       // Not JSON, continue with other checks
     }
@@ -73,6 +109,11 @@ function detectGateway(response) {
     if (url.includes("sabpaisa")) return "SABPAISA";
     if (url.includes("stripe")) return "STRIPE";
     if (url.includes("payu")) return "PAYU";
+    if (url.includes("chillpay")) return "CHILLPAY";
+    if (url.includes("kaypay")) return "SETU";
+    if (url.includes("checkout.paystack")) return "PAYSTACK";
+    if (url.includes("mollie.com")) return "MOLLIE";
+    if (url.includes("flutterwave")) return "FLUTTERWAVE";
   }
 
   return null;
@@ -386,6 +427,165 @@ function getWebhookPayload(
         phone: customer.phone.replace(/[^0-9]/g, ""),
       };
 
+    case "CHILLPAY":
+      return {
+        OrderNo: merchantReference,
+        TransactionId: `CHP-TXN-${Math.random().toString(36).substr(2, 15)}`,
+        PaymentStatus: "0",
+        Amount: amount * 100,
+        BankRefCode: `BANK-REF-${Math.random().toString(36).substr(2, 10)}`,
+        PaymentChannel: paymentMode === "CARD" ? "CreditCard" : "UPI",
+        PaymentDateTime: new Date()
+          .toISOString()
+          .replace("T", " ")
+          .slice(0, 19),
+        Currency: "THB",
+        MerchantCode: "M038709",
+        PayLinkToken: Math.random().toString(36).substr(2, 10).toUpperCase(),
+        PayLinkId: Math.floor(Math.random() * 100000),
+        CardNumber: "411111******1111",
+        CardBank: "Bangkok Bank",
+        CardType: "Visa",
+        ChannelCode: "CC",
+        Installment: 0,
+        InterestType: "Zero",
+        InterestRate: 0,
+      };
+
+    case "SETU":
+      return {
+        events: [
+          {
+            id: `evt_${Math.random().toString(36).substr(2, 15)}`,
+            type: "BILL_FULFILMENT_STATUS",
+            timeStamp: new Date().toISOString(),
+            data: {
+              platformBillID: merchantReference,
+              billerBillID: merchantReference,
+              status: "PAYMENT_SUCCESSFUL",
+              amountPaid: {
+                value: amount * 100,
+                currency: "INR",
+              },
+              payerVpa: customer.email,
+              transactionId: Math.random().toString(36).substr(2, 15),
+              transactionNote: `Payment for ${merchantReference}`,
+              receiptId: Math.random().toString(36).substr(2, 15),
+              additionalInfo: {
+                merchantReference: merchantReference,
+                customerName: customer.name,
+                customerEmail: customer.email,
+              },
+            },
+          },
+        ],
+        partnerDetails: {
+          partnerId: `PARTNER_${Math.random().toString(36).substr(2, 5)}`,
+          partnerName: "Test Partner",
+        },
+      };
+
+    case "PAYSTACK":
+      return {
+        event: "charge.success",
+        data: {
+          id: Math.floor(Math.random() * 10000000),
+          domain: "live",
+          status: "success",
+          reference: `${merchantReference}_${Date.now()}`,
+          amount: amount * 100,
+          message: null,
+          gateway_response: "Approved",
+          paid_at: new Date(Date.now() + 60000).toISOString(),
+          created_at: new Date().toISOString(),
+          channel: paymentMode.toLowerCase(),
+          currency: "NGN",
+          ip_address: "127.0.0.1",
+          metadata: {
+            merchant_reference: merchantReference,
+            customer_name: customer.name,
+            customer_email: customer.email,
+          },
+          authorization: {
+            authorization_code: `AUTH_${Math.random().toString(36).substr(2, 10)}`,
+            bin: "539999",
+            last4: "1234",
+            exp_month: "12",
+            exp_year: "2028",
+            channel: "card",
+            card_type: "visa",
+            bank: "TEST BANK",
+            country_code: "NG",
+            brand: "visa",
+            reusable: true,
+            signature: `SIG_${Math.random().toString(36).substr(2, 10)}`,
+          },
+          customer: {
+            id: Math.floor(Math.random() * 1000000),
+            first_name: customer.name.split(" ")[0] || "User",
+            last_name: customer.name.split(" ")[1] || "Test",
+            email: customer.email,
+            customer_code: `CUS_${Math.random().toString(36).substr(2, 10)}`,
+            phone: customer.phone,
+            risk_action: "default",
+          },
+        },
+      };
+
+    case "MOLLIE":
+      return {
+        id: `tr_${Math.random().toString(36).substr(2, 10)}`,
+        mode: "live",
+        createdAt: new Date().toISOString(),
+        amount: {
+          value: amount.toFixed(2),
+          currency: "EUR",
+        },
+        description: `Payment for ${merchantReference}`,
+        method: paymentMode.toLowerCase(),
+        status: "paid",
+        paidAt: new Date(Date.now() + 60000).toISOString(),
+        metadata: {
+          merchant_reference: merchantReference,
+          order_id: merchantReference,
+        },
+        details: {
+          cardNumber: "**** **** **** 1234",
+          cardHolder: customer.name,
+          cardAudience: "consumer",
+          cardLabel: paymentMode === "CARD" ? "Visa" : "UPI",
+          cardCountryCode: "NL",
+        },
+        _links: {
+          self: {
+            href: `https://api.mollie.com/v2/payments/tr_${Math.random().toString(36).substr(2, 10)}`,
+            type: "application/hal+json",
+          },
+        },
+      };
+
+    case "FLUTTERWAVE":
+      return {
+        event: "charge.completed",
+        data: {
+          tx_ref: `${merchantReference}_${Date.now()}`,
+          flw_ref: `FLW-TEST-${Math.random().toString(36).substr(2, 10)}`,
+          amount: amount,
+          currency: "NGN",
+          status: "successful",
+          meta: {
+            merchant_reference: merchantReference,
+            customer_name: customer.name,
+            customer_email: customer.email,
+          },
+          customer: {
+            email: customer.email,
+            name: customer.name,
+            phonenumber: customer.phone,
+          },
+        },
+      };
+
     default:
       return null;
   }
@@ -393,9 +593,21 @@ function getWebhookPayload(
 
 /**
  * Trigger webhook for a pay-in
+ * @param {object} payInResult - The pay-in result object
+ * @param {string} forceStatus - Force status (optional)
+ * @param {number} gatewayDelayMin - Minimum gateway delay in ms (default: 1000)
+ * @param {number} gatewayDelayMax - Maximum gateway delay in ms (default: 10000)
  */
-async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
-  await new Promise((resolve) => setTimeout(resolve, 5000));
+async function triggerWebhookForPayIn(
+  payInResult,
+  forceStatus = null,
+  gatewayDelayMin = 1000,
+  gatewayDelayMax = 10000,
+) {
+  // ========== REALISTIC: Gateway takes time to send webhook (1-10 seconds) ==========
+  const gatewayDelay = await randomDelay(gatewayDelayMin, gatewayDelayMax);
+  logInfo(`🌐 Gateway took ${gatewayDelay}ms to send webhook...`);
+
   const { request, response } = payInResult;
   const { merchantReference, paymentMode, customer } = request;
   const amount = request.amount;
@@ -435,6 +647,11 @@ async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
     SABPAISA: config.API_PATHS.WEBHOOKS.SABPAISA,
     STRIPE: config.API_PATHS.WEBHOOKS.STRIPE,
     PAYU: config.API_PATHS.WEBHOOKS.PAYU,
+    CHILLPAY: config.API_PATHS.WEBHOOKS.CHILLPAY,
+    SETU: config.API_PATHS.WEBHOOKS.SETU,
+    PAYSTACK: config.API_PATHS.WEBHOOKS.PAYSTACK,
+    MOLLIE: config.API_PATHS.WEBHOOKS.MOLLIE,
+    FLUTTERWAVE: config.API_PATHS.WEBHOOKS.FLUTTERWAVE,
   };
 
   const webhookUrl = `${config.BASE_URL}${webhookUrls[gateway]}`;
@@ -454,6 +671,7 @@ async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
       gateway,
       status: "SUCCESS",
       success: true,
+      gatewayDelay: gatewayDelay,
       response: webhookResponse.data,
     };
   } catch (error) {
@@ -466,6 +684,7 @@ async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
       gateway,
       status: "FAILED",
       success: false,
+      gatewayDelay: gatewayDelay,
       error: error.message,
     };
   }

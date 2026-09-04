@@ -6,7 +6,7 @@ const {
   logWarning,
 } = require("../utils/logger");
 
-// UPDATED GATEWAY MAP with SabPaisa
+// UPDATED GATEWAY MAP with all new gateways
 const GATEWAY_MAP = {
   1: { id: 1, name: "Razorpay", keyPatterns: ["rzp_test"] },
   2: { id: 2, name: "Cashfree", keyPatterns: ["cashfree", "cf_"] },
@@ -14,17 +14,34 @@ const GATEWAY_MAP = {
   4: { id: 4, name: "ChargeBee", keyPatterns: ["chargebee", "cb_", "ch_"] },
   5: { id: 5, name: "Bennupay", keyPatterns: ["bennupay", "bp_"] },
   6: { id: 6, name: "SabPaisa", keyPatterns: ["sppay_", "sabpaisa"] },
+  7: {
+    id: 7,
+    name: "Chillpay",
+    keyPatterns: ["chillpay", "CHP-TXN", "PayLinkToken"],
+  },
+  8: {
+    id: 8,
+    name: "Setu",
+    keyPatterns: ["setu", "platformBillID", "billerBillID"],
+  },
   9: { id: 9, name: "Stripe", keyPatterns: ["stripe", "cs_test_"] },
   10: { id: 10, name: "PayU", keyPatterns: ["payu", "txnid"] },
+  12: {
+    id: 12,
+    name: "Paystack",
+    keyPatterns: ["paystack", "checkout.paystack"],
+  },
+  14: { id: 14, name: "Mollie", keyPatterns: ["mollie", "mollie.com"] },
+  15: {
+    id: 15,
+    name: "Flutterwave",
+    keyPatterns: ["flutterwave", "checkout-v2.dev-flutterwave"],
+  },
 };
 
-/**
- * Detect gateway ID from intent JSON
- */
 function detectGatewayId(response) {
   if (!response) return null;
 
-  // Check intent field
   if (response.intent) {
     try {
       let intent = response.intent;
@@ -62,6 +79,16 @@ function detectGatewayId(response) {
         return 6;
       }
 
+      // CHILLPAY
+      if (intent.payLinkId || intent.payLinkToken || intent.PayLinkToken) {
+        return 7;
+      }
+
+      // SETU - no specific intent, check URL
+      if (response.url && response.url.includes("kaypay")) {
+        return 8;
+      }
+
       // Stripe
       if (intent.sessionId && intent.sessionId.startsWith("cs_test_")) {
         return 9;
@@ -70,6 +97,21 @@ function detectGatewayId(response) {
       // PayU
       if (intent.txnid) {
         return 10;
+      }
+
+      // PAYSTACK
+      if (intent.accessCode || intent.reference) {
+        return 12;
+      }
+
+      // MOLLIE
+      if (intent.paymentId && intent.paymentId.startsWith("tr_")) {
+        return 14;
+      }
+
+      // FLUTTERWAVE
+      if (intent.tx_ref || intent.checkoutUrl?.includes("flutterwave")) {
+        return 15;
       }
     } catch (e) {
       // Not JSON, continue
@@ -85,23 +127,22 @@ function detectGatewayId(response) {
     if (url.includes("chargebee")) return 4;
     if (url.includes("bennupay")) return 5;
     if (url.includes("sabpaisa")) return 6;
+    if (url.includes("chillpay")) return 7;
+    if (url.includes("kaypay")) return 8;
     if (url.includes("stripe")) return 9;
     if (url.includes("payu")) return 10;
+    if (url.includes("checkout.paystack")) return 12;
+    if (url.includes("mollie.com")) return 14;
+    if (url.includes("flutterwave")) return 15;
   }
 
   return null;
 }
 
-/**
- * Get gateway name from ID
- */
 function getGatewayName(gatewayId) {
   return GATEWAY_MAP[gatewayId]?.name || `Unknown (${gatewayId})`;
 }
 
-/**
- * Validate pay-in response
- */
 function validatePayInResponse(response, request, expectedGatewayId) {
   const result = {
     valid: true,
@@ -111,13 +152,11 @@ function validatePayInResponse(response, request, expectedGatewayId) {
     detectedGatewayName: null,
   };
 
-  // Check required fields
   if (!response.id) {
     result.valid = false;
     result.errors.push("Missing transaction ID");
   }
 
-  // Status is "PROCESSING"
   if (!response.status) {
     result.valid = false;
     result.errors.push("Missing status");
@@ -136,7 +175,6 @@ function validatePayInResponse(response, request, expectedGatewayId) {
     );
   }
 
-  // Detect gateway from intent
   const detectedId = detectGatewayId(response);
   result.detectedGatewayId = detectedId;
   result.detectedGatewayName = detectedId
@@ -159,7 +197,6 @@ function validatePayInResponse(response, request, expectedGatewayId) {
     );
   }
 
-  // Validate fee/tax fields
   if (response.feeAmount !== undefined) {
     result.warnings.push(`Fee Amount: ₹${response.feeAmount}`);
   }
@@ -173,9 +210,6 @@ function validatePayInResponse(response, request, expectedGatewayId) {
   return result;
 }
 
-/**
- * Validate webhook response
- */
 function validateWebhookResponse(response) {
   const result = {
     valid: true,
@@ -206,9 +240,6 @@ function validateWebhookResponse(response) {
   return result;
 }
 
-/**
- * Check if routing is correct
- */
 function isRoutingCorrect(response, expectedGatewayId) {
   const detectedId = detectGatewayId(response);
   if (detectedId === null) {
@@ -217,9 +248,6 @@ function isRoutingCorrect(response, expectedGatewayId) {
   return detectedId === expectedGatewayId;
 }
 
-/**
- * Get detailed routing info
- */
 function getRoutingInfo(response, expectedGatewayId) {
   const detectedId = detectGatewayId(response);
 

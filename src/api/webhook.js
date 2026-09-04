@@ -2,71 +2,54 @@ const axios = require("axios");
 const config = require("../config");
 const { logger, logSuccess, logError, logInfo } = require("../utils/logger");
 
-/**
- * Simulate Cashfree webhook
- * @param {object} data - Webhook payload
- * @returns {Promise<object>}
- */
 async function simulateCashfreeWebhook(data) {
   return simulateWebhook("CASHFREE", data);
 }
 
-/**
- * Simulate Razorpay webhook
- * @param {object} data - Webhook payload
- * @returns {Promise<object>}
- */
 async function simulateRazorpayWebhook(data) {
   return simulateWebhook("RAZORPAY", data);
 }
 
-/**
- * Simulate Adyen webhook
- * @param {object} data - Webhook payload
- * @returns {Promise<object>}
- */
 async function simulateAdyenWebhook(data) {
   return simulateWebhook("ADYEN", data);
 }
 
-/**
- * Simulate Chargebee webhook
- * @param {object} data - Webhook payload
- * @returns {Promise<object>}
- */
 async function simulateChargebeeWebhook(data) {
   return simulateWebhook("CHARGEBEE", data);
 }
 
-/**
- * Simulate Bennupay webhook
- * @param {object} data - Webhook payload
- * @returns {Promise<object>}
- */
 async function simulateBennupayWebhook(data) {
   return simulateWebhook("BENNUPAY", data);
 }
 
-/**
- * Simulate Stripe webhook
- */
 async function simulateStripeWebhook(data) {
   return simulateWebhook("STRIPE", data);
 }
 
-/**
- * Simulate PayU webhook
- */
 async function simulatePayUWebhook(data) {
   return simulateWebhook("PAYU", data);
 }
 
-/**
- * Simulate any webhook
- * @param {string} gateway - 'CASHFREE', 'RAZORPAY', 'ADYEN','CHARGEBEE','BENNUPAY'
- * @param {object} data - Webhook payload
- * @returns {Promise<object>}
- */
+async function simulateChillpayWebhook(data) {
+  return simulateWebhook("CHILLPAY", data);
+}
+
+async function simulateSetuWebhook(data) {
+  return simulateWebhook("SETU", data);
+}
+
+async function simulatePaystackWebhook(data) {
+  return simulateWebhook("PAYSTACK", data);
+}
+
+async function simulateMollieWebhook(data) {
+  return simulateWebhook("MOLLIE", data);
+}
+
+async function simulateFlutterwaveWebhook(data) {
+  return simulateWebhook("FLUTTERWAVE", data);
+}
+
 async function simulateWebhook(gateway, data) {
   try {
     const paths = {
@@ -77,6 +60,11 @@ async function simulateWebhook(gateway, data) {
       BENNUPAY: config.API_PATHS.WEBHOOKS.BENNUPAY,
       STRIPE: config.API_PATHS.WEBHOOKS.STRIPE,
       PAYU: config.API_PATHS.WEBHOOKS.PAYU,
+      CHILLPAY: config.API_PATHS.WEBHOOKS.CHILLPAY,
+      SETU: config.API_PATHS.WEBHOOKS.SETU,
+      PAYSTACK: config.API_PATHS.WEBHOOKS.PAYSTACK,
+      MOLLIE: config.API_PATHS.WEBHOOKS.MOLLIE,
+      FLUTTERWAVE: config.API_PATHS.WEBHOOKS.FLUTTERWAVE,
     };
 
     const url = `${config.BASE_URL}${paths[gateway]}`;
@@ -101,18 +89,10 @@ async function simulateWebhook(gateway, data) {
   }
 }
 
-/**
- * Get sample webhook payloads
- * @param {string} merchantReference - The merchant reference
- * @param {number} amount - Payment amount
- * @param {string} paymentMode - Payment mode
- * @param {object} customer - Customer details
- * @returns {object}
- */
 function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
   const amountInPaise = Math.round(amount * 100);
 
-  // Cashfree payload
+  // Cashfree payload (existing)
   const cashfreePayload = {
     type: "PAYMENT_SUCCESS_WEBHOOK",
     data: {
@@ -148,7 +128,7 @@ function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
     },
   };
 
-  // Razorpay payload
+  // Razorpay payload (existing)
   const razorpayPayload = {
     event: "payment.captured",
     payload: {
@@ -212,7 +192,7 @@ function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
     created_at: Math.floor(Date.now() / 1000),
   };
 
-  // Adyen payload
+  // Adyen payload (existing)
   const adyenPayload = {
     live: "false",
     notificationItems: [
@@ -242,7 +222,7 @@ function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
     ],
   };
 
-  // Chargebee payload
+  // Chargebee payload (existing)
   const chargebeePayload = {
     event: "payment_success",
     customer: {
@@ -261,7 +241,7 @@ function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
     created_at: new Date().toISOString(),
   };
 
-  // Bennupay payload
+  // Bennupay payload (existing)
   const bennupayPayload = {
     event: "payment.completed",
     data: {
@@ -280,7 +260,7 @@ function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
     },
   };
 
-  // Stripe payload
+  // Stripe payload (existing)
   const stripePayload = {
     id: `evt_${Math.random().toString(36).substr(2, 10)}`,
     type: "payment_intent.succeeded",
@@ -333,7 +313,7 @@ function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
     },
   };
 
-  // Payu payload
+  // PayU payload (existing)
   const payuPayload = {
     txnid: merchantReference,
     mihpayid: `PayU_Transaction_ID_${Math.random().toString(36).substr(2, 10)}`,
@@ -362,6 +342,164 @@ function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
     phone: customer.phone.replace(/[^0-9]/g, ""),
   };
 
+  // ========== NEW GATEWAY PAYLOADS ==========
+
+  // FLUTTERWAVE payload
+  const flutterwavePayload = {
+    event: "charge.completed",
+    data: {
+      tx_ref: `${merchantReference}_${Date.now()}`,
+      flw_ref: `FLW-TEST-${Math.random().toString(36).substr(2, 10)}`,
+      amount: amount,
+      currency: "NGN",
+      status: "successful",
+      meta: {
+        merchant_reference: merchantReference,
+        customer_name: customer.name,
+        customer_email: customer.email,
+      },
+      customer: {
+        email: customer.email,
+        name: customer.name,
+        phonenumber: customer.phone,
+      },
+    },
+  };
+
+  // MOLLIE payload
+  const molliePayload = {
+    id: `tr_${Math.random().toString(36).substr(2, 10)}`,
+    mode: "live",
+    createdAt: new Date().toISOString(),
+    amount: {
+      value: amount.toFixed(2),
+      currency: "EUR",
+    },
+    description: `Payment for ${merchantReference}`,
+    method: paymentMode.toLowerCase(),
+    status: "paid",
+    paidAt: new Date(Date.now() + 60000).toISOString(),
+    metadata: {
+      merchant_reference: merchantReference,
+      order_id: merchantReference,
+    },
+    details: {
+      cardNumber: "**** **** **** 1234",
+      cardHolder: customer.name,
+      cardAudience: "consumer",
+      cardLabel: paymentMode === "CARD" ? "Visa" : "UPI",
+      cardCountryCode: "NL",
+    },
+    _links: {
+      self: {
+        href: `https://api.mollie.com/v2/payments/tr_${Math.random().toString(36).substr(2, 10)}`,
+        type: "application/hal+json",
+      },
+    },
+  };
+
+  // PAYSTACK payload
+  const paystackPayload = {
+    event: "charge.success",
+    data: {
+      id: Math.floor(Math.random() * 10000000),
+      domain: "live",
+      status: "success",
+      reference: `${merchantReference}_${Date.now()}`,
+      amount: amount * 100, // Paystack uses kobo
+      message: null,
+      gateway_response: "Approved",
+      paid_at: new Date(Date.now() + 60000).toISOString(),
+      created_at: new Date().toISOString(),
+      channel: paymentMode.toLowerCase(),
+      currency: "NGN",
+      ip_address: "127.0.0.1",
+      metadata: {
+        merchant_reference: merchantReference,
+        customer_name: customer.name,
+        customer_email: customer.email,
+      },
+      authorization: {
+        authorization_code: `AUTH_${Math.random().toString(36).substr(2, 10)}`,
+        bin: "539999",
+        last4: "1234",
+        exp_month: "12",
+        exp_year: "2028",
+        channel: "card",
+        card_type: "visa",
+        bank: "TEST BANK",
+        country_code: "NG",
+        brand: "visa",
+        reusable: true,
+        signature: `SIG_${Math.random().toString(36).substr(2, 10)}`,
+      },
+      customer: {
+        id: Math.floor(Math.random() * 1000000),
+        first_name: customer.name.split(" ")[0] || "User",
+        last_name: customer.name.split(" ")[1] || "Test",
+        email: customer.email,
+        customer_code: `CUS_${Math.random().toString(36).substr(2, 10)}`,
+        phone: customer.phone,
+        risk_action: "default",
+      },
+    },
+  };
+
+  // CHILLPAY payload
+  const chillpayPayload = {
+    OrderNo: merchantReference,
+    TransactionId: `CHP-TXN-${Math.random().toString(36).substr(2, 15)}`,
+    PaymentStatus: "0",
+    Amount: amount * 100,
+    BankRefCode: `BANK-REF-${Math.random().toString(36).substr(2, 10)}`,
+    PaymentChannel: paymentMode === "CARD" ? "CreditCard" : "UPI",
+    PaymentDateTime: new Date().toISOString().replace("T", " ").slice(0, 19),
+    Currency: "THB",
+    MerchantCode: "M038709",
+    PayLinkToken: Math.random().toString(36).substr(2, 10).toUpperCase(),
+    PayLinkId: Math.floor(Math.random() * 100000),
+    CardNumber: "411111******1111",
+    CardBank: "Bangkok Bank",
+    CardType: "Visa",
+    ChannelCode: "CC",
+    Installment: 0,
+    InterestType: "Zero",
+    InterestRate: 0,
+  };
+
+  // SETU payload
+  const setuPayload = {
+    events: [
+      {
+        id: `evt_${Math.random().toString(36).substr(2, 15)}`,
+        type: "BILL_FULFILMENT_STATUS",
+        timeStamp: new Date().toISOString(),
+        data: {
+          platformBillID: merchantReference,
+          billerBillID: merchantReference,
+          status: "PAYMENT_SUCCESSFUL",
+          amountPaid: {
+            value: amount * 100,
+            currency: "INR",
+          },
+          payerVpa: customer.email,
+          transactionId: (Date.now().toString() + Math.floor(Math.random() * 1000).toString().padStart(3, '0')).slice(-12),
+          transactionNote: `Payment for ${merchantReference}`,
+          receiptId: Math.random().toString(36).substr(2, 15),
+          additionalInfo: {
+            merchantReference: merchantReference,
+            customerName: customer.name,
+            customerEmail: customer.email,
+          },
+        },
+      },
+    ],
+    partnerDetails: {
+      partnerId: `PARTNER_${Math.random().toString(36).substr(2, 5)}`,
+      partnerName: "Test Partner",
+    },
+  };
+
   return {
     cashfree: cashfreePayload,
     razorpay: razorpayPayload,
@@ -370,6 +508,11 @@ function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
     bennupay: bennupayPayload,
     stripe: stripePayload,
     payu: payuPayload,
+    flutterwave: flutterwavePayload,
+    mollie: molliePayload,
+    paystack: paystackPayload,
+    chillpay: chillpayPayload,
+    setu: setuPayload,
   };
 }
 
@@ -381,6 +524,11 @@ module.exports = {
   simulateBennupayWebhook,
   simulateStripeWebhook,
   simulatePayUWebhook,
+  simulateChillpayWebhook,
+  simulateSetuWebhook,
+  simulatePaystackWebhook,
+  simulateMollieWebhook,
+  simulateFlutterwaveWebhook,
   simulateWebhook,
   getWebhookPayloads,
 };

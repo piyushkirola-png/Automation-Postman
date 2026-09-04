@@ -148,6 +148,7 @@ module.exports = {
       merchantId: 17,
     },
   },
+
   // Helper function to get user by merchant ID
   getUsersByMerchant: function (merchantId) {
     const result = [];
@@ -158,6 +159,7 @@ module.exports = {
     }
     return result;
   },
+
   // Helper function to get all merchants with users
   getMerchantsWithUsers: function () {
     const merchants = {};

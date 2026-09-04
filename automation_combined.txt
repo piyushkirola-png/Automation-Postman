@@ -395,71 +395,54 @@ const axios = require("axios");
 const config = require("../config");
 const { logger, logSuccess, logError, logInfo } = require("../utils/logger");
 
-/**
- * Simulate Cashfree webhook
- * @param {object} data - Webhook payload
- * @returns {Promise<object>}
- */
 async function simulateCashfreeWebhook(data) {
   return simulateWebhook("CASHFREE", data);
 }
 
-/**
- * Simulate Razorpay webhook
- * @param {object} data - Webhook payload
- * @returns {Promise<object>}
- */
 async function simulateRazorpayWebhook(data) {
   return simulateWebhook("RAZORPAY", data);
 }
 
-/**
- * Simulate Adyen webhook
- * @param {object} data - Webhook payload
- * @returns {Promise<object>}
- */
 async function simulateAdyenWebhook(data) {
   return simulateWebhook("ADYEN", data);
 }
 
-/**
- * Simulate Chargebee webhook
- * @param {object} data - Webhook payload
- * @returns {Promise<object>}
- */
 async function simulateChargebeeWebhook(data) {
   return simulateWebhook("CHARGEBEE", data);
 }
 
-/**
- * Simulate Bennupay webhook
- * @param {object} data - Webhook payload
- * @returns {Promise<object>}
- */
 async function simulateBennupayWebhook(data) {
   return simulateWebhook("BENNUPAY", data);
 }
 
-/**
- * Simulate Stripe webhook
- */
 async function simulateStripeWebhook(data) {
   return simulateWebhook("STRIPE", data);
 }
 
-/**
- * Simulate PayU webhook
- */
 async function simulatePayUWebhook(data) {
   return simulateWebhook("PAYU", data);
 }
 
-/**
- * Simulate any webhook
- * @param {string} gateway - 'CASHFREE', 'RAZORPAY', 'ADYEN','CHARGEBEE','BENNUPAY'
- * @param {object} data - Webhook payload
- * @returns {Promise<object>}
- */
+async function simulateChillpayWebhook(data) {
+  return simulateWebhook("CHILLPAY", data);
+}
+
+async function simulateSetuWebhook(data) {
+  return simulateWebhook("SETU", data);
+}
+
+async function simulatePaystackWebhook(data) {
+  return simulateWebhook("PAYSTACK", data);
+}
+
+async function simulateMollieWebhook(data) {
+  return simulateWebhook("MOLLIE", data);
+}
+
+async function simulateFlutterwaveWebhook(data) {
+  return simulateWebhook("FLUTTERWAVE", data);
+}
+
 async function simulateWebhook(gateway, data) {
   try {
     const paths = {
@@ -470,6 +453,11 @@ async function simulateWebhook(gateway, data) {
       BENNUPAY: config.API_PATHS.WEBHOOKS.BENNUPAY,
       STRIPE: config.API_PATHS.WEBHOOKS.STRIPE,
       PAYU: config.API_PATHS.WEBHOOKS.PAYU,
+      CHILLPAY: config.API_PATHS.WEBHOOKS.CHILLPAY,
+      SETU: config.API_PATHS.WEBHOOKS.SETU,
+      PAYSTACK: config.API_PATHS.WEBHOOKS.PAYSTACK,
+      MOLLIE: config.API_PATHS.WEBHOOKS.MOLLIE,
+      FLUTTERWAVE: config.API_PATHS.WEBHOOKS.FLUTTERWAVE,
     };
 
     const url = `${config.BASE_URL}${paths[gateway]}`;
@@ -494,18 +482,10 @@ async function simulateWebhook(gateway, data) {
   }
 }
 
-/**
- * Get sample webhook payloads
- * @param {string} merchantReference - The merchant reference
- * @param {number} amount - Payment amount
- * @param {string} paymentMode - Payment mode
- * @param {object} customer - Customer details
- * @returns {object}
- */
 function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
   const amountInPaise = Math.round(amount * 100);
 
-  // Cashfree payload
+  // Cashfree payload (existing)
   const cashfreePayload = {
     type: "PAYMENT_SUCCESS_WEBHOOK",
     data: {
@@ -541,7 +521,7 @@ function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
     },
   };
 
-  // Razorpay payload
+  // Razorpay payload (existing)
   const razorpayPayload = {
     event: "payment.captured",
     payload: {
@@ -605,7 +585,7 @@ function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
     created_at: Math.floor(Date.now() / 1000),
   };
 
-  // Adyen payload
+  // Adyen payload (existing)
   const adyenPayload = {
     live: "false",
     notificationItems: [
@@ -635,7 +615,7 @@ function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
     ],
   };
 
-  // Chargebee payload
+  // Chargebee payload (existing)
   const chargebeePayload = {
     event: "payment_success",
     customer: {
@@ -654,7 +634,7 @@ function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
     created_at: new Date().toISOString(),
   };
 
-  // Bennupay payload
+  // Bennupay payload (existing)
   const bennupayPayload = {
     event: "payment.completed",
     data: {
@@ -673,7 +653,7 @@ function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
     },
   };
 
-  // Stripe payload
+  // Stripe payload (existing)
   const stripePayload = {
     id: `evt_${Math.random().toString(36).substr(2, 10)}`,
     type: "payment_intent.succeeded",
@@ -726,7 +706,7 @@ function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
     },
   };
 
-  // Payu payload
+  // PayU payload (existing)
   const payuPayload = {
     txnid: merchantReference,
     mihpayid: `PayU_Transaction_ID_${Math.random().toString(36).substr(2, 10)}`,
@@ -755,6 +735,164 @@ function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
     phone: customer.phone.replace(/[^0-9]/g, ""),
   };
 
+  // ========== NEW GATEWAY PAYLOADS ==========
+
+  // FLUTTERWAVE payload
+  const flutterwavePayload = {
+    event: "charge.completed",
+    data: {
+      tx_ref: `${merchantReference}_${Date.now()}`,
+      flw_ref: `FLW-TEST-${Math.random().toString(36).substr(2, 10)}`,
+      amount: amount,
+      currency: "NGN",
+      status: "successful",
+      meta: {
+        merchant_reference: merchantReference,
+        customer_name: customer.name,
+        customer_email: customer.email,
+      },
+      customer: {
+        email: customer.email,
+        name: customer.name,
+        phonenumber: customer.phone,
+      },
+    },
+  };
+
+  // MOLLIE payload
+  const molliePayload = {
+    id: `tr_${Math.random().toString(36).substr(2, 10)}`,
+    mode: "live",
+    createdAt: new Date().toISOString(),
+    amount: {
+      value: amount.toFixed(2),
+      currency: "EUR",
+    },
+    description: `Payment for ${merchantReference}`,
+    method: paymentMode.toLowerCase(),
+    status: "paid",
+    paidAt: new Date(Date.now() + 60000).toISOString(),
+    metadata: {
+      merchant_reference: merchantReference,
+      order_id: merchantReference,
+    },
+    details: {
+      cardNumber: "**** **** **** 1234",
+      cardHolder: customer.name,
+      cardAudience: "consumer",
+      cardLabel: paymentMode === "CARD" ? "Visa" : "UPI",
+      cardCountryCode: "NL",
+    },
+    _links: {
+      self: {
+        href: `https://api.mollie.com/v2/payments/tr_${Math.random().toString(36).substr(2, 10)}`,
+        type: "application/hal+json",
+      },
+    },
+  };
+
+  // PAYSTACK payload
+  const paystackPayload = {
+    event: "charge.success",
+    data: {
+      id: Math.floor(Math.random() * 10000000),
+      domain: "live",
+      status: "success",
+      reference: `${merchantReference}_${Date.now()}`,
+      amount: amount * 100, // Paystack uses kobo
+      message: null,
+      gateway_response: "Approved",
+      paid_at: new Date(Date.now() + 60000).toISOString(),
+      created_at: new Date().toISOString(),
+      channel: paymentMode.toLowerCase(),
+      currency: "NGN",
+      ip_address: "127.0.0.1",
+      metadata: {
+        merchant_reference: merchantReference,
+        customer_name: customer.name,
+        customer_email: customer.email,
+      },
+      authorization: {
+        authorization_code: `AUTH_${Math.random().toString(36).substr(2, 10)}`,
+        bin: "539999",
+        last4: "1234",
+        exp_month: "12",
+        exp_year: "2028",
+        channel: "card",
+        card_type: "visa",
+        bank: "TEST BANK",
+        country_code: "NG",
+        brand: "visa",
+        reusable: true,
+        signature: `SIG_${Math.random().toString(36).substr(2, 10)}`,
+      },
+      customer: {
+        id: Math.floor(Math.random() * 1000000),
+        first_name: customer.name.split(" ")[0] || "User",
+        last_name: customer.name.split(" ")[1] || "Test",
+        email: customer.email,
+        customer_code: `CUS_${Math.random().toString(36).substr(2, 10)}`,
+        phone: customer.phone,
+        risk_action: "default",
+      },
+    },
+  };
+
+  // CHILLPAY payload
+  const chillpayPayload = {
+    OrderNo: merchantReference,
+    TransactionId: `CHP-TXN-${Math.random().toString(36).substr(2, 15)}`,
+    PaymentStatus: "0",
+    Amount: amount * 100,
+    BankRefCode: `BANK-REF-${Math.random().toString(36).substr(2, 10)}`,
+    PaymentChannel: paymentMode === "CARD" ? "CreditCard" : "UPI",
+    PaymentDateTime: new Date().toISOString().replace("T", " ").slice(0, 19),
+    Currency: "THB",
+    MerchantCode: "M038709",
+    PayLinkToken: Math.random().toString(36).substr(2, 10).toUpperCase(),
+    PayLinkId: Math.floor(Math.random() * 100000),
+    CardNumber: "411111******1111",
+    CardBank: "Bangkok Bank",
+    CardType: "Visa",
+    ChannelCode: "CC",
+    Installment: 0,
+    InterestType: "Zero",
+    InterestRate: 0,
+  };
+
+  // SETU payload
+  const setuPayload = {
+    events: [
+      {
+        id: `evt_${Math.random().toString(36).substr(2, 15)}`,
+        type: "BILL_FULFILMENT_STATUS",
+        timeStamp: new Date().toISOString(),
+        data: {
+          platformBillID: merchantReference,
+          billerBillID: merchantReference,
+          status: "PAYMENT_SUCCESSFUL",
+          amountPaid: {
+            value: amount * 100,
+            currency: "INR",
+          },
+          payerVpa: customer.email,
+          transactionId: Math.random().toString(36).substr(2, 15),
+          transactionNote: `Payment for ${merchantReference}`,
+          receiptId: Math.random().toString(36).substr(2, 15),
+          additionalInfo: {
+            merchantReference: merchantReference,
+            customerName: customer.name,
+            customerEmail: customer.email,
+          },
+        },
+      },
+    ],
+    partnerDetails: {
+      partnerId: `PARTNER_${Math.random().toString(36).substr(2, 5)}`,
+      partnerName: "Test Partner",
+    },
+  };
+
   return {
     cashfree: cashfreePayload,
     razorpay: razorpayPayload,
@@ -763,6 +901,11 @@ function getWebhookPayloads(merchantReference, amount, paymentMode, customer) {
     bennupay: bennupayPayload,
     stripe: stripePayload,
     payu: payuPayload,
+    flutterwave: flutterwavePayload,
+    mollie: molliePayload,
+    paystack: paystackPayload,
+    chillpay: chillpayPayload,
+    setu: setuPayload,
   };
 }
 
@@ -774,6 +917,11 @@ module.exports = {
   simulateBennupayWebhook,
   simulateStripeWebhook,
   simulatePayUWebhook,
+  simulateChillpayWebhook,
+  simulateSetuWebhook,
+  simulatePaystackWebhook,
+  simulateMollieWebhook,
+  simulateFlutterwaveWebhook,
   simulateWebhook,
   getWebhookPayloads,
 };
@@ -808,7 +956,7 @@ pool.on("error", (err) => {
  * Get routing configuration for specific merchants
  */
 async function getRoutingConfig(merchantIds = null) {
-  const ids = merchantIds || [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  const ids = merchantIds || [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
   const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
 
   const query = `
@@ -965,15 +1113,18 @@ module.exports = {
       SABPAISA: "/api/webhooks/sabpaisa",
       STRIPE: "/api/webhooks/stripe",
       PAYU: "/api/webhooks/payu",
+      CHILLPAY: "/api/webhooks/chillpay",
+      SETU: "/api/webhooks/setu",
+      PAYSTACK: "/api/webhooks/paystack",
+      MOLLIE: "/api/webhooks/mollie",
+      FLUTTERWAVE: "/api/webhooks/flutterwave",
     },
   },
   TEST_CONFIG: {
     TRANSACTIONS_PER_USER: parseInt(process.env.TRANSACTIONS_PER_USER),
     MIN_AMOUNT: parseFloat(process.env.MIN_AMOUNT) || 1000,
     MAX_AMOUNT: parseFloat(process.env.MAX_AMOUNT) || 5000,
-    PAYMENT_MODES: (
-      process.env.PAYMENT_MODES || "UPI,CARD"
-    ).split(","),
+    PAYMENT_MODES: (process.env.PAYMENT_MODES || "UPI,CARD").split(","),
   },
   GATEWAY_IDS: {
     RAZORPAY: 1,
@@ -982,302 +1133,168 @@ module.exports = {
     CHARGEBEE: 4,
     BENNUPAY: 5,
     SABPAISA: 6,
+    CHILLPAY: 7,
+    SETU: 8,
     STRIPE: 9,
     PAYU: 10,
+    PAYSTACK: 12,
+    MOLLIE: 14,
+    FLUTTERWAVE: 15,
   },
-};
-==================== C:\Users\DELL\Desktop\Automation\src\config\routing.js ====================
-// config/routing.js
-module.exports = {
-  merchants: {
-    1: {
-      id: 1,
-      name: "Merchant1",
-      routingStrategy: "PRIORITY",
-      gateways: [
-        { id: 1, name: "Razorpay", priority: 1, maxRetries: 3 },
-        { id: 2, name: "Cashfree", priority: 2, maxRetries: 3 },
-        { id: 3, name: "Adyen", priority: 3, maxRetries: 3 },
-        { id: 4, name: "Chargebee", priority: 4, maxRetries: 3 },
-        { id: 5, name: "Bennupay", priority: 5, maxRetries: 3 },
-      ],
-    },
-    2: {
-      id: 2,
-      name: "Merchant2",
-      routingStrategy: "HYBRID",
-      gateways: [
-        { id: 3, name: "Adyen", priority: 1, maxRetries: 3 },
-        { id: 1, name: "Razorpay", priority: 2, maxRetries: 3 },
-        { id: 2, name: "Cashfree", priority: 3, maxRetries: 3 },
-        { id: 4, name: "Chargebee", priority: 4, maxRetries: 3 },
-        { id: 5, name: "Bennupay", priority: 5, maxRetries: 3 },
-      ],
-    },
-    3: {
-      id: 3,
-      name: "Merchant3",
-      routingStrategy: "HYBRID",
-      gateways: [
-        { id: 2, name: "Cashfree", priority: 1, maxRetries: 3 },
-        { id: 1, name: "Razorpay", priority: 2, maxRetries: 3 },
-        { id: 3, name: "Adyen", priority: 3, maxRetries: 3 },
-        { id: 4, name: "Chargebee", priority: 4, maxRetries: 3 },
-        { id: 5, name: "Bennupay", priority: 5, maxRetries: 3 },
-      ],
-    },
-    4: {
-      id: 4,
-      name: "Merchant4",
-      routingStrategy: "PRIORITY",
-      gateways: [
-        { id: 2, name: "Cashfree", priority: 1, maxRetries: 3 },
-        { id: 3, name: "Adyen", priority: 2, maxRetries: 3 },
-        { id: 1, name: "Razorpay", priority: 3, maxRetries: 3 },
-        { id: 4, name: "Chargebee", priority: 4, maxRetries: 3 },
-        { id: 5, name: "Bennupay", priority: 5, maxRetries: 3 },
-      ],
-    },
-    5: {
-      id: 5,
-      name: "Merchant5",
-      routingStrategy: "PRIORITY",
-      gateways: [
-        { id: 1, name: "Razorpay", priority: 1, maxRetries: 3 },
-        { id: 2, name: "Cashfree", priority: 2, maxRetries: 3 },
-        { id: 3, name: "Adyen", priority: 3, maxRetries: 3 },
-        { id: 4, name: "Chargebee", priority: 4, maxRetries: 3 },
-        { id: 5, name: "Bennupay", priority: 5, maxRetries: 3 },
-      ],
-    },
-    6: {
-      id: 6,
-      name: "Merchant6",
-      routingStrategy: "FAILOVER",
-      gateways: [
-        { id: 3, name: "Adyen", priority: 1, maxRetries: 3 },
-        { id: 1, name: "Razorpay", priority: 2, maxRetries: 3 },
-        { id: 2, name: "Cashfree", priority: 3, maxRetries: 3 },
-        { id: 4, name: "Chargebee", priority: 4, maxRetries: 3 },
-        { id: 5, name: "Bennupay", priority: 5, maxRetries: 3 },
-      ],
-    },
-    7: {
-      id: 7,
-      name: "Merchant7",
-      routingStrategy: "PRIORITY",
-      gateways: [
-        { id: 2, name: "Cashfree", priority: 1, maxRetries: 3 },
-        { id: 3, name: "Adyen", priority: 2, maxRetries: 3 },
-        { id: 1, name: "Razorpay", priority: 3, maxRetries: 3 },
-        { id: 4, name: "Chargebee", priority: 4, maxRetries: 3 },
-        { id: 5, name: "Bennupay", priority: 5, maxRetries: 3 },
-      ],
-    },
-    8: {
-      id: 8,
-      name: "Merchant8",
-      routingStrategy: "PRIORITY",
-      gateways: [
-        { id: 2, name: "Cashfree", priority: 1, maxRetries: 3 },
-        { id: 1, name: "Razorpay", priority: 2, maxRetries: 3 },
-        { id: 3, name: "Adyen", priority: 3, maxRetries: 3 },
-        { id: 4, name: "Chargebee", priority: 4, maxRetries: 3 },
-        { id: 5, name: "Bennupay", priority: 5, maxRetries: 3 },
-      ],
-    },
-    9: {
-      id: 9,
-      name: "Merchant9",
-      routingStrategy: "PRIORITY",
-      gateways: [
-        { id: 2, name: "Cashfree", priority: 1, maxRetries: 3 },
-        { id: 1, name: "Razorpay", priority: 2, maxRetries: 3 },
-        { id: 3, name: "Adyen", priority: 3, maxRetries: 3 },
-        { id: 4, name: "Chargebee", priority: 4, maxRetries: 3 },
-        { id: 5, name: "Bennupay", priority: 5, maxRetries: 3 },
-      ],
-    },
-    10: {
-      id: 10,
-      name: "Merchant10",
-      routingStrategy: "PRIORITY",
-      gateways: [
-        { id: 2, name: "Cashfree", priority: 1, maxRetries: 3 },
-        { id: 1, name: "Razorpay", priority: 2, maxRetries: 3 },
-        { id: 3, name: "Adyen", priority: 3, maxRetries: 3 },
-        { id: 4, name: "Chargebee", priority: 4, maxRetries: 3 },
-        { id: 5, name: "Bennupay", priority: 5, maxRetries: 3 },
-      ],
-    },
-  },
-  // Helper function to get merchant by ID
-  getMerchant: function (id) {
-    return this.merchants[id];
-  },
-  // Helper function to get gateways for merchant
-  getGateways: function (merchantId) {
-    const merchant = this.merchants[merchantId];
-    return merchant ? merchant.gateways : [];
-  },
-  // Helper function to get routing strategy
-  getStrategy: function (merchantId) {
-    const merchant = this.merchants[merchantId];
-    return merchant ? merchant.routingStrategy : null;
-  },
+
 };
 ==================== C:\Users\DELL\Desktop\Automation\src\config\users.js ====================
-// config/users.js
 module.exports = {
   users: {
-    amanpandey: {
+    rahulsharma: {
       id: 2,
-      name: "Aman Pandey",
-      email: "amanpandey@gmail.com",
-      role: "MERCHANT",
+      name: "Rahul Sharma",
+      email: "rahulsharma@gmail.com",
+      role: "USER",
       merchantId: 1,
     },
-    gopalkrishna: {
+    ankitkumar: {
       id: 5,
-      name: "Gopal Krishna",
-      email: "gopalkrishna@gmail.com",
-      role: "MERCHANT",
+      name: "Ankit Kumar",
+      email: "ankitkumar@gmail.com",
+      role: "USER",
       merchantId: 1,
     },
-    soniakalonia: {
+    amitverma: {
       id: 3,
-      name: "Sonia Kalonia",
-      email: "soniakalonia@gmail.com",
-      role: "MERCHANT",
+      name: "Amit Verma",
+      email: "amitverma@gmail.com",
+      role: "USER",
       merchantId: 2,
     },
-    piyushkirola: {
+    rohitsingh: {
       id: 4,
-      name: "Piyush Kirola",
-      email: "piyushkirola@gmail.com",
-      role: "MERCHANT",
+      name: "Rohit Singh",
+      email: "rohitsingh@gmail.com",
+      role: "USER",
       merchantId: 3,
     },
-    rajeshkhanna: {
+    vivekgupta: {
       id: 7,
-      name: "Rajesh Khanna",
-      email: "rajeshkhanna@gmail.com",
-      role: "MERCHANT",
+      name: "Vivek Gupta",
+      email: "vivekgupta@gmail.com",
+      role: "USER",
       merchantId: 4,
     },
-    kavyaiyer: {
+    anjalikumar: {
       id: 15,
-      name: "Kavya Iyer",
-      email: "kavyaiyer@gmail.com",
-      role: "MERCHANT",
+      name: "Anjali Kumar",
+      email: "anjalikumar@gmail.com",
+      role: "USER",
       merchantId: 4,
     },
-    raghunathmishra: {
+    karanmalhotra: {
       id: 8,
-      name: "Raghunath Mishra",
-      email: "raghunathmishra@gmail.com",
-      role: "MERCHANT",
+      name: "Karan Malhotra",
+      email: "karanmalhotra@gmail.com",
+      role: "USER",
       merchantId: 5,
     },
-    amishabaghel: {
+    rajpatel: {
       id: 9,
-      name: "Amisha Baghel",
-      email: "amishabaghel@gmail.com",
-      role: "MERCHANT",
+      name: "Raj Patel",
+      email: "rajpatel@gmail.com",
+      role: "USER",
       merchantId: 6,
     },
-    snehapatel: {
-      id: 12,
-      name: "Sneha Patel",
-      email: "snehapatel@gmail.com",
-      role: "MERCHANT",
-      merchantId: 7,
-    },
-    arjunmehta: {
-      id: 14,
-      name: "Arjun Mehta",
-      email: "arjunmehta@gmail.com",
-      role: "MERCHANT",
-      merchantId: 8,
-    },
-    ananyanair: {
-      id: 13,
-      name: "Ananya Nair",
-      email: "ananyanair@gmail.com",
-      role: "MERCHANT",
-      merchantId: 9,
-    },
-    deepakgupta: {
-      id: 11,
-      name: "Deepak Gupta",
-      email: "deepakgupta@gmail.com",
-      role: "MERCHANT",
-      merchantId: 10,
-    },
     priyasharma: {
-      id: 10,
+      id: 12,
       name: "Priya Sharma",
       email: "priyasharma@gmail.com",
-      role: "MERCHANT",
+      role: "USER",
+      merchantId: 7,
+    },
+    poojasingh: {
+      id: 14,
+      name: "Pooja Singh",
+      email: "poojasingh@gmail.com",
+      role: "USER",
+      merchantId: 8,
+    },
+    nehaverma: {
+      id: 13,
+      name: "Neha Verma",
+      email: "nehaverma@gmail.com",
+      role: "USER",
+      merchantId: 9,
+    },
+    nikhiljoshi: {
+      id: 11,
+      name: "Nikhil Joshi",
+      email: "nikhiljoshi@gmail.com",
+      role: "USER",
+      merchantId: 10,
+    },
+    mohitagarwal: {
+      id: 10,
+      name: "Mohit Agarwal",
+      email: "mohitagarwal@gmail.com",
+      role: "USER",
       merchantId: 11,
     },
-    denisegusikowski: {
+    riyagupta: {
       id: 17,
-      name: "Denise Gusikowski",
-      email: "denisegusikowski@gmail.com",
-      role: "MERCHANT",
+      name: "Riya Gupta",
+      email: "riyagupta@gmail.com",
+      role: "USER",
       merchantId: 12,
     },
-    jovannyswaniawski: {
+    simranmalhotra: {
       id: 18,
-      name: "Jovanny Swaniawski",
-      email: "jovannyswaniawski@gmail.com",
-      role: "MERCHANT",
+      name: "Simran Malhotra",
+      email: "simranmalhotra@gmail.com",
+      role: "USER",
       merchantId: 13,
     },
-    karenohara: {
+    nishaagarwal: {
       id: 20,
-      name: "Karen OHara",
-      email: "karenohara@gmail.com",
-      role: "MERCHANT",
+      name: "Nisha Agarwal",
+      email: "nishaagarwal@gmail.com",
+      role: "USER",
       merchantId: 14,
     },
-    abbeybeahan: {
+    sandeepyadav: {
       id: 22,
-      name: "Abbey Beahan",
-      email: "abbeybeahan@gmail.com",
-      role: "MERCHANT",
+      name: "Sandeep Yadav",
+      email: "sandeepyadav@gmail.com",
+      role: "USER",
       merchantId: 15,
     },
-    vanessamcclure: {
+    kavyapatel: {
       id: 19,
-      name: "Vanessa McClure",
-      email: "vanessamcclure@gmail.com",
-      role: "MERCHANT",
+      name: "Kavya Patel",
+      email: "kavyapatel@gmail.com",
+      role: "USER",
       merchantId: 15,
     },
-    smithgoyal: {
+    snehamehta: {
       id: 16,
-      name: "Smith Goyal",
-      email: "smithgoyal@gmail.com",
-      role: "MERCHANT",
+      name: "Sneha Mehta",
+      email: "snehamehta@gmail.com",
+      role: "USER",
       merchantId: 16,
     },
-    allenwaters: {
+    aartijoshi: {
       id: 21,
-      name: "Allen Waters",
-      email: "allenwaters@gmail.com",
-      role: "MERCHANT",
+      name: "Aarti Joshi",
+      email: "aartijoshi@gmail.com",
+      role: "USER",
       merchantId: 17,
     },
-    meeranair: {
+    arjunmehta: {
       id: 6,
-      name: "Meera Nair",
-      email: "meeranair@gmail.com",
-      role: "MERCHANT",
+      name: "Arjun Mehta",
+      email: "arjunmehta@gmail.com",
+      role: "USER",
       merchantId: 17,
     },
   },
+
   // Helper function to get user by merchant ID
   getUsersByMerchant: function (merchantId) {
     const result = [];
@@ -1288,6 +1305,7 @@ module.exports = {
     }
     return result;
   },
+
   // Helper function to get all merchants with users
   getMerchantsWithUsers: function () {
     const merchants = {};
@@ -1300,9 +1318,14 @@ module.exports = {
     return merchants;
   },
 };
-==================== C:\Users\DELL\Desktop\Automation\src\tests\payin-only-test.js ====================
-const { loginUser } = require("../api/auth");
-const { createPayIn } = require("../api/payin");
+==================== C:\Users\DELL\Desktop\Automation\src\tests\simple-payin-webhook-test.js ====================
+const axios = require("axios");
+const crypto = require("crypto");
+const config = require("../config");
+const {
+  triggerWebhookForPayIn,
+  detectGateway,
+} = require("../utils/webhook-trigger");
 const {
   logSection,
   logSuccess,
@@ -1310,37 +1333,53 @@ const {
   logInfo,
   logWarning,
 } = require("../utils/logger");
-const usersConfig = require("../config/users");
-const {
-  getRoutingConfig,
-  buildMerchantConfig,
-  closeDbConnection,
-} = require("../config/db");
+const { pool } = require("../config/db");
 
-// ============== CONFIGURATION ==============
-const ALLOWED_GATEWAYS = [2, 3, 4, 5, 6, 9, 10];
-const ALL_PAYMENT_MODES = ["UPI", "CARD"];
-const ITERATIONS_PER_MODE = parseInt(process.env.ITERATIONS_PER_MODE) || 5;
-const MIN_AMOUNT = parseInt(process.env.MIN_AMOUNT) || 1000;
-const MAX_AMOUNT = parseInt(process.env.MAX_AMOUNT) || 10000;
+// USER CREDENTIALS
+const USER_EMAIL = "snehamehta@gmail.com";
+const USER_PASSWORD = "12345678";
+const CLIENT_SECRET =
+  "1e323eb4aff43a9fd38d7636d098d3af07834715dc1bc40c2c2a97974b67fd6b";
 
-// Retry function for API calls
-async function createPayInWithRetry(
-  accessToken,
-  clientSecret,
-  options,
-  maxRetries = 3,
-) {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await createPayIn(accessToken, clientSecret, options);
-    } catch (error) {
-      if (attempt === maxRetries) throw error;
-      const delay = 1000 * Math.pow(2, attempt - 1);
-      logWarning(`Retry ${attempt}/${maxRetries} after ${delay}ms`);
-      await new Promise((resolve) => setTimeout(resolve, delay));
-    }
-  }
+// TEST CONFIGURATION
+const TOTAL_TRANSACTIONS = 100;
+const PAYMENT_MODES = ["UPI", "CARD"];
+const MIN_AMOUNT = 100;
+const MAX_AMOUNT = 3000;
+
+const DELAY_BETWEEN_PAYINS_MIN = 0;
+const DELAY_BETWEEN_PAYINS_MAX = 0;
+const CUSTOMER_PAYMENT_MIN = 0;
+const CUSTOMER_PAYMENT_MAX = 0;
+const GATEWAY_WEBHOOK_MIN = 0;
+const GATEWAY_WEBHOOK_MAX = 0;
+
+// CONCURRENCY LIMIT
+const MAX_CONCURRENT_WEBHOOKS = 10;
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+async function randomDelay(min, max) {
+  const delay = randomInt(min, max);
+  await new Promise((resolve) => setTimeout(resolve, delay));
+  return delay;
+}
+
+function generateSignature(merchantReference, clientSecret) {
+  return crypto
+    .createHmac("sha256", clientSecret)
+    .update(merchantReference)
+    .digest("hex");
+}
+
+function generateMerchantReference() {
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 10000)
+    .toString()
+    .padStart(4, "0");
+  return `SIMPLE-${timestamp}-${random}`;
 }
 
 function randomAmountInMultiples(min, max) {
@@ -1349,319 +1388,500 @@ function randomAmountInMultiples(min, max) {
   const randomThousands =
     Math.floor(Math.random() * (maxThousands - minThousands + 1)) +
     minThousands;
-  return randomThousands * 1000;
+  return randomThousands * 100;
 }
 
-function getUserForMerchant(merchantId) {
-  for (const [key, user] of Object.entries(usersConfig.users)) {
-    if (user.merchantId === merchantId) {
-      return {
-        email: user.email,
-        password: "12345678",
-        userId: user.id,
-        merchantId: user.merchantId,
-        name: user.name,
-      };
-    }
-  }
-  return null;
+function randomCustomer() {
+  const firstNames = [
+    "John",
+    "Emma",
+    "Michael",
+    "Sophia",
+    "William",
+    "Olivia",
+    "James",
+    "Ava",
+  ];
+  const lastNames = [
+    "Smith",
+    "Johnson",
+    "Williams",
+    "Brown",
+    "Jones",
+    "Garcia",
+    "Miller",
+    "Davis",
+  ];
+  const domains = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com"];
+
+  const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+  const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+  const name = `${firstName} ${lastName}`;
+  const email = `${firstName.toLowerCase()}.${lastName.toLowerCase()}${randomInt(100, 999)}@${domains[Math.floor(Math.random() * domains.length)]}`;
+  const phone = `+91${randomInt(7000000000, 9999999999)}`;
+
+  return { name, email, phone };
 }
 
-async function testMerchant(merchantConfig) {
-  const { merchantId, merchantName, routingStrategy, paymentModeMap } =
-    merchantConfig;
+let activeWebhooks = 0;
 
-  logSection(
-    `ðŸ§ª TESTING MERCHANT ${merchantId}: ${merchantName} (${routingStrategy})`,
-  );
-
-  const user = getUserForMerchant(merchantId);
-  if (!user) {
-    logError(`âŒ No user found for merchant ${merchantId}`);
-    return {
-      merchantId,
-      merchantName,
-      routingStrategy,
-      error: "No user found",
-      results: [],
-      summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
-    };
+async function withConcurrencyLimit(fn) {
+  while (activeWebhooks >= MAX_CONCURRENT_WEBHOOKS) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
-
-  logInfo(`ðŸ‘¤ User: ${user.name} (${user.email})`);
-
-  let loginData;
+  activeWebhooks++;
   try {
-    loginData = await loginUser(user.email, user.password);
+    return await fn();
+  } finally {
+    activeWebhooks--;
+  }
+}
+
+async function loginUser() {
+  try {
+    const url = `${config.BASE_URL}/api/auth/user/login`;
+    const payload = { email: USER_EMAIL, password: USER_PASSWORD };
+
+    logInfo(`Logging in: ${USER_EMAIL}`);
+
+    const response = await axios.post(url, payload, {
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (response.data.success) {
+      const data = response.data.data;
+      const accessToken = data.accessToken;
+      logSuccess(`âœ… Login successful for ${USER_EMAIL}`);
+      return { accessToken };
+    } else {
+      throw new Error(response.data.message || "Login failed");
+    }
   } catch (error) {
     logError(`âŒ Login failed: ${error.message}`);
-    return {
-      merchantId,
-      merchantName,
-      routingStrategy,
-      error: `Login failed: ${error.message}`,
-      results: [],
-      summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
-    };
+    throw error;
   }
-
-  const { accessToken, clientSecret } = loginData;
-  logSuccess(`âœ… Logged in as ${user.email}`);
-
-  const allResults = [];
-  let total = 0,
-    passed = 0,
-    failed = 0,
-    skipped = 0;
-
-  for (const paymentMode of ALL_PAYMENT_MODES) {
-    const allGateways = paymentModeMap[paymentMode] || [];
-
-    const selectedGateway = allGateways.find((g) =>
-      ALLOWED_GATEWAYS.includes(g.gatewayId),
-    );
-
-    if (!selectedGateway) {
-      logWarning(`âš ï¸ SKIPPING ${paymentMode} - No allowed gateway found`);
-      const skipResult = {
-        paymentMode,
-        expectedGateway: "N/A",
-        expectedGatewayId: null,
-        status: "SKIPPED",
-        reason: "No allowed gateway found",
-        transactions: [],
-      };
-      allResults.push(skipResult);
-      skipped++;
-      continue;
-    }
-
-    logInfo(
-      `\nðŸ” Testing ${paymentMode} â†’ Expected: ${selectedGateway.gatewayName} (Priority ${selectedGateway.priority})`,
-    );
-
-    const modeResults = [];
-    const promises = [];
-
-    for (let i = 0; i < ITERATIONS_PER_MODE; i++) {
-      const amount = randomAmountInMultiples(MIN_AMOUNT, MAX_AMOUNT);
-      const customer = {
-        name: `Test User ${i}`,
-        email: `test${i}@example.com`,
-        phone: `99999999${String(i).padStart(2, "0")}`,
-      };
-      const merchantReference = `PAYINONLY-${merchantId}-${paymentMode}-${Date.now()}-${i}`;
-
-      const promise = createPayInWithRetry(accessToken, clientSecret, {
-        paymentMode,
-        amount,
-        customer,
-        merchantReference,
-      })
-        .then((payInResult) => {
-          logInfo(
-            `âœ… Pay-In created: ${merchantReference} | ID: ${payInResult.response.id}`,
-          );
-          return {
-            success: true,
-            iteration: i + 1,
-            amount,
-            merchantReference,
-            transactionId: payInResult.response.id,
-            status: payInResult.response.status,
-            expectedGateway: selectedGateway.gatewayName,
-            actualGateway: selectedGateway.gatewayName,
-            isCorrect: true,
-            passed: true,
-            url: payInResult.response.url,
-            feeAmount: payInResult.response.feeAmount,
-            taxAmount: payInResult.response.taxAmount,
-            amountToCredit: payInResult.response.amountToCredit,
-            error: null,
-          };
-        })
-        .catch((error) => {
-          return {
-            success: false,
-            iteration: i + 1,
-            amount,
-            merchantReference,
-            transactionId: null,
-            status: null,
-            expectedGateway: selectedGateway.gatewayName,
-            actualGateway: null,
-            isCorrect: false,
-            passed: false,
-            feeAmount: null,
-            taxAmount: null,
-            amountToCredit: null,
-            url: null,
-            error: error.message,
-          };
-        });
-
-      promises.push(promise);
-    }
-
-    const results = await Promise.all(promises);
-
-    let modePassed = 0,
-      modeFailed = 0;
-    for (const result of results) {
-      modeResults.push(result);
-      if (result.passed) {
-        modePassed++;
-        passed++;
-      } else {
-        modeFailed++;
-        failed++;
-      }
-      total++;
-    }
-
-    const passRate =
-      modeResults.length > 0
-        ? ((modePassed / modeResults.length) * 100).toFixed(0)
-        : 0;
-    if (modeFailed === 0) {
-      logSuccess(
-        `  âœ… ${paymentMode}: ${modePassed}/${modeResults.length} PASSED (${passRate}%)`,
-      );
-    } else {
-      logError(
-        `  âŒ ${paymentMode}: ${modePassed}/${modeResults.length} PASSED (${passRate}%)`,
-      );
-    }
-
-    allResults.push({
-      paymentMode,
-      expectedGateway: selectedGateway.gatewayName,
-      expectedGatewayId: selectedGateway.gatewayId,
-      priority: selectedGateway.priority,
-      status: modeFailed === 0 ? "PASSED" : "FAILED",
-      transactions: modeResults,
-    });
-  }
-
-  logSection(`ðŸ“Š MERCHANT ${merchantId} SUMMARY`);
-  console.log(
-    `  Total: ${total} | Passed: ${passed} | Failed: ${failed} | Skipped: ${skipped}`,
-  );
-  const passRate = total > 0 ? ((passed / total) * 100).toFixed(1) : 0;
-  console.log(`  Pass Rate: ${passRate}%`);
-
-  return {
-    merchantId,
-    merchantName,
-    routingStrategy,
-    results: allResults,
-    summary: { total, passed, failed, skipped, passRate },
-  };
 }
 
-async function testPayInOnly() {
+async function createPayIn(accessToken, options) {
+  try {
+    const url = `${config.BASE_URL}/api/payin-requests`;
+
+    const { paymentMode, amount, customer, merchantReference } = options;
+
+    const signature = generateSignature(merchantReference, CLIENT_SECRET);
+
+    const payload = {
+      amount,
+      currency: "INR",
+      merchantReference,
+      paymentMode,
+      customer: {
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+      },
+    };
+
+    logInfo(
+      `Creating Pay-In: ${merchantReference} | ${paymentMode} | â‚¹${amount}`,
+    );
+
+    const response = await axios.post(url, payload, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "x-signature": signature,
+      },
+    });
+
+    logSuccess(
+      `âœ… Pay-In created: ID ${response.data.id} | Status: ${response.data.status}`,
+    );
+
+    return {
+      request: {
+        payload,
+        signature,
+        merchantReference,
+        amount,
+        paymentMode,
+        customer,
+      },
+      response: response.data,
+    };
+  } catch (error) {
+    logError(`âŒ Pay-In failed: ${error.message}`);
+    if (error.response) {
+      logError(`Status: ${error.response.status}`);
+      logError(`Response: ${JSON.stringify(error.response.data)}`);
+    }
+    throw error;
+  }
+}
+
+// ==================== LAST ID FUNCTIONS ====================
+
+function getLastIdFilePath() {
+  const path = require("path");
+  return path.join(__dirname, "../../last-id.txt");
+}
+
+function readLastMaxId() {
+  const fs = require("fs");
+  const filePath = getLastIdFilePath();
+  try {
+    if (fs.existsSync(filePath)) {
+      const content = fs.readFileSync(filePath, "utf8").trim();
+      return parseInt(content) || 0;
+    }
+  } catch (error) {
+    logWarning(`Could not read last-id.txt: ${error.message}`);
+  }
+  return 0;
+}
+
+function writeLastMaxId(id) {
+  const fs = require("fs");
+  const filePath = getLastIdFilePath();
+  try {
+    fs.writeFileSync(filePath, String(id));
+    logInfo(`ðŸ“ Saved last max ID: ${id}`);
+  } catch (error) {
+    logError(`Failed to write last-id.txt: ${error.message}`);
+  }
+}
+
+// ==================== TEST COUNTER FUNCTIONS ====================
+
+function getTestCounterFilePath() {
+  const path = require("path");
+  return path.join(__dirname, "../../test-counter.txt");
+}
+
+function readTestCounter() {
+  const fs = require("fs");
+  const filePath = getTestCounterFilePath();
+  try {
+    if (fs.existsSync(filePath)) {
+      const content = fs.readFileSync(filePath, "utf8").trim();
+      return parseInt(content) || 0;
+    }
+  } catch (error) {
+    logWarning(`Could not read test-counter.txt: ${error.message}`);
+  }
+  return 0;
+}
+
+function writeTestCounter(counter) {
+  const fs = require("fs");
+  const filePath = getTestCounterFilePath();
+  try {
+    fs.writeFileSync(filePath, String(counter));
+  } catch (error) {
+    logError(`Failed to write test-counter.txt: ${error.message}`);
+  }
+}
+
+// ==================== DB STATUS QUERY ====================
+
+async function getDbStatusCounts(lastMaxId) {
+  try {
+    const query = `
+      SELECT status, COUNT(*) as count
+      FROM "PayInRequest"
+      WHERE id > $1
+      GROUP BY status
+    `;
+    const result = await pool.query(query, [lastMaxId]);
+
+    const counts = {
+      SUCCESS: 0,
+      FAILED: 0,
+      PENDING: 0,
+      PROCESSING: 0,
+      total: 0,
+    };
+
+    for (const row of result.rows) {
+      const status = row.status.toUpperCase();
+      if (
+        status === "SUCCESS" ||
+        status === "COMPLETED" ||
+        status === "PAID" ||
+        status === "CAPTURED"
+      ) {
+        counts.SUCCESS += parseInt(row.count);
+      } else if (
+        status === "FAILED" ||
+        status === "ERROR" ||
+        status === "DECLINED" ||
+        status === "REJECTED"
+      ) {
+        counts.FAILED += parseInt(row.count);
+      } else if (
+        status === "PENDING" ||
+        status === "INITIATED" ||
+        status === "PROCESSING"
+      ) {
+        counts.PENDING += parseInt(row.count);
+      } else {
+        counts.PENDING += parseInt(row.count);
+      }
+      counts.total += parseInt(row.count);
+    }
+
+    // Get max ID after test
+    const maxIdQuery = `SELECT MAX(id) as maxId FROM "PayInRequest"`;
+    const maxIdResult = await pool.query(maxIdQuery);
+    const currentMaxId = maxIdResult.rows[0]?.maxid || 0;
+
+    return { counts, currentMaxId };
+  } catch (error) {
+    logError(`âŒ DB query failed: ${error.message}`);
+    return {
+      counts: { SUCCESS: 0, FAILED: 0, PENDING: 0, total: 0 },
+      currentMaxId: 0,
+    };
+  }
+}
+
+// ==================== APPEND TO FILE WITH COUNTER ====================
+
+function appendToPayinTestFile(summaryText, testNumber) {
+  const fs = require("fs");
+  const path = require("path");
+  const filePath = path.join(__dirname, "../../payin-test.txt");
+  const MAX_ENTRIES = 10;
+
+  try {
+    // Read existing content
+    let content = "";
+    if (fs.existsSync(filePath)) {
+      content = fs.readFileSync(filePath, "utf8");
+    }
+
+    // Split content by separators to count entries
+    const entries = content.split(/={60,}/).filter((entry) => entry.trim());
+
+    // Keep only last (MAX_ENTRIES - 1) entries (since we're adding one more)
+    let newContent = "";
+    if (entries.length >= MAX_ENTRIES) {
+      // Get last MAX_ENTRIES - 1 entries
+      const keepEntries = entries.slice(-(MAX_ENTRIES - 1));
+      newContent = keepEntries.join(
+        "============================================================",
+      );
+      // Ensure proper separator at the end if there are entries
+      if (keepEntries.length > 0) {
+        newContent =
+          "============================================================" +
+          newContent;
+      }
+    } else {
+      newContent = content;
+    }
+
+    // Add the new summary with TEST #X
+    const separator =
+      "============================================================";
+    const newEntry = `
+        ${separator}
+        TEST #${testNumber} - ${new Date().toLocaleString()}
+        ${separator}
+        ${summaryText}
+        `;
+
+    // Write back only last MAX_ENTRIES
+    fs.writeFileSync(filePath, newContent + newEntry);
+    logSuccess(
+      `ðŸ“„ Appended TEST #${testNumber} to: payin-test.txt (keeping last ${MAX_ENTRIES})`,
+    );
+  } catch (error) {
+    logError(`Failed to append to payin-test.txt: ${error.message}`);
+  }
+}
+
+async function runSingleTransaction(accessToken, transactionIndex) {
+  const paymentMode = PAYMENT_MODES[transactionIndex % PAYMENT_MODES.length];
+  const amount = randomAmountInMultiples(MIN_AMOUNT, MAX_AMOUNT);
+  const customer = randomCustomer();
+  const merchantReference = generateMerchantReference();
+
+  logInfo(`\nðŸ“Œ Transaction #${transactionIndex + 1}: ${merchantReference}`);
+
+  try {
+    // Step 1: Create Pay-In
+    const payInResult = await createPayIn(accessToken, {
+      paymentMode,
+      amount,
+      customer,
+      merchantReference,
+    });
+
+    // Step 2: Customer pays (FAST - 0.5 to 2 seconds)
+    const customerDelay = await randomDelay(
+      CUSTOMER_PAYMENT_MIN,
+      CUSTOMER_PAYMENT_MAX,
+    );
+    logInfo(`ðŸ‘¤ Customer took ${customerDelay}ms to complete payment...`);
+
+    // Step 3: Detect gateway
+    const gateway = detectGateway(payInResult.response);
+    if (gateway) {
+      logInfo(`âœ… Gateway detected: ${gateway}`);
+    } else {
+      logWarning(`âš ï¸ Could not detect gateway for ${merchantReference}`);
+    }
+
+    // Step 4: Trigger webhook with concurrency limit (FAST - 0.3 to 1 second)
+    const webhookResult = await withConcurrencyLimit(async () => {
+      return await triggerWebhookForPayIn(
+        payInResult,
+        "SUCCESS",
+        GATEWAY_WEBHOOK_MIN,
+        GATEWAY_WEBHOOK_MAX,
+      );
+    });
+
+    const success = webhookResult && webhookResult.success;
+
+    return {
+      success: true,
+      passed: success,
+      transactionIndex: transactionIndex + 1,
+      merchantReference,
+      paymentMode,
+      amount,
+      customer,
+      gateway: gateway || "Unknown",
+      transactionId: payInResult.response.id,
+      customerDelay,
+      gatewayDelay: webhookResult?.gatewayDelay || 0,
+      webhookSuccess: success,
+      error: null,
+    };
+  } catch (error) {
+    logError(
+      `âŒ Transaction #${transactionIndex + 1} failed: ${error.message}`,
+    );
+    return {
+      success: false,
+      passed: false,
+      transactionIndex: transactionIndex + 1,
+      merchantReference,
+      paymentMode,
+      amount,
+      customer,
+      gateway: null,
+      transactionId: null,
+      customerDelay: 0,
+      gatewayDelay: 0,
+      webhookSuccess: false,
+      error: error.message,
+    };
+  }
+}
+
+async function runSimplePayinWebhookTest() {
   const startTime = Date.now();
 
-  logSection("ðŸš€ PAY-IN ONLY TEST - NO WEBHOOKS");
+  // Read last max ID before test
+  const lastMaxId = readLastMaxId();
+  logInfo(`ðŸ“Š Last max ID from previous run: ${lastMaxId}`);
+
+  // Read and increment test counter
+  const testCounter = readTestCounter() + 1;
+  writeTestCounter(testCounter);
+  logInfo(`ðŸ“Š Test #${testCounter} - Starting...`);
+
+  logSection("ðŸš€ SIMPLE PAY-IN + WEBHOOK TEST (FAST MODE)");
+
   console.log(`
   â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-  â•‘  CONFIGURATION                                                    â•‘
-  â•‘  â”œâ”€â”€ Gateways: 2,3,4,5,6,9,10                                    â•‘
-  â•‘  â”‚              (Cashfree, Adyen, Chargebee, Bennupay,           â•‘
-  â•‘  â”‚               SabPaisa, Stripe, PayU)                        â•‘
-  â•‘  â”œâ”€â”€ Payment Modes: UPI, CARD                                    â•‘
-  â•‘  â”œâ”€â”€ Iterations per mode: ${ITERATIONS_PER_MODE}                                  â•‘
-  â•‘  â”œâ”€â”€ Merchants: 1 to 10                                          â•‘
-  â•‘  â””â”€â”€ Webhooks: âŒ NOT TRIGGERED                                  â•‘
+  â•‘  CONFIGURATION (FAST MODE)                                        â•‘
+  â•‘  â”œâ”€â”€ User:           ${USER_EMAIL}                                  â•‘
+  â•‘  â”œâ”€â”€ Transactions:   ${TOTAL_TRANSACTIONS}                                           â•‘
+  â•‘  â”œâ”€â”€ Payment Modes:  ${PAYMENT_MODES.join(", ")}                                          â•‘
+  â•‘  â”œâ”€â”€ Amount Range:   â‚¹${MIN_AMOUNT} - â‚¹${MAX_AMOUNT} (multiples of 1000)              â•‘
+  â•‘  â”œâ”€â”€ Customer Delay: ${CUSTOMER_PAYMENT_MIN / 1000}-${CUSTOMER_PAYMENT_MAX / 1000}s (FAST)    â•‘
+  â•‘  â”œâ”€â”€ Gateway Delay:  ${GATEWAY_WEBHOOK_MIN / 1000}-${GATEWAY_WEBHOOK_MAX / 1000}s (FAST)      â•‘
+  â•‘  â”œâ”€â”€ Last Max ID:    ${lastMaxId}                                           â•‘
+  â•‘  â”œâ”€â”€ Test Counter:   ${testCounter}                                           â•‘
+  â•‘  â””â”€â”€ Max Webhooks:   ${MAX_CONCURRENT_WEBHOOKS}                                           â•‘
   â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   `);
 
   try {
-    logInfo("ðŸ“¡ Fetching routing configuration from database...");
-    const rawData = await getRoutingConfig();
+    // Step 1: Login
+    logInfo("ðŸ” Logging in...");
+    const { accessToken } = await loginUser();
 
-    if (rawData.length === 0) {
-      logError("âŒ No routing configuration found");
-      await closeDbConnection();
-      return { error: "No configuration found" };
+    // Step 2: Run all transactions sequentially with delays
+    const results = [];
+    let passed = 0;
+    let failed = 0;
+
+    for (let i = 0; i < TOTAL_TRANSACTIONS; i++) {
+      // Delay between transactions (except first)
+      if (i > 0) {
+        const delayMs = await randomDelay(
+          DELAY_BETWEEN_PAYINS_MIN,
+          DELAY_BETWEEN_PAYINS_MAX,
+        );
+        logInfo(`â³ Waiting ${delayMs}ms before next transaction...`);
+      }
+
+      const result = await runSingleTransaction(accessToken, i);
+      results.push(result);
+
+      if (result.passed) {
+        passed++;
+      } else {
+        failed++;
+      }
     }
 
-    const merchants = buildMerchantConfig(rawData);
-    logSuccess(`âœ… Found ${merchants.length} merchants with routing config`);
-
-    const merchantPromises = merchants.map((merchant) =>
-      testMerchant(merchant),
-    );
-    const merchantResults = await Promise.all(merchantPromises);
-
-    await closeDbConnection();
-
-    logSection("ðŸ“Š OVERALL SUMMARY");
-
-    let totalAll = 0,
-      passedAll = 0,
-      failedAll = 0,
-      skippedAll = 0;
-
-    console.log(
-      "\nâ”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”",
-    );
-    console.log(
-      "â”‚                    MERCHANT RESULTS (PAY-IN ONLY)                          â”‚",
-    );
-    console.log(
-      "â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤",
-    );
-
-    for (const mr of merchantResults) {
-      const { merchantId, merchantName, routingStrategy, summary } = mr;
-      const status = summary.failed === 0 ? "âœ… PASS" : "âŒ FAIL";
-      const passRate =
-        summary.total > 0
-          ? ((summary.passed / summary.total) * 100).toFixed(1)
-          : 0;
-
-      console.log(
-        `â”‚ ${merchantId}. ${merchantName.padEnd(15)} ${routingStrategy.padEnd(10)} â”‚ Total: ${String(summary.total).padStart(3)} â”‚ Pass: ${String(summary.passed).padStart(3)} â”‚ Fail: ${String(summary.failed).padStart(3)} â”‚ Skip: ${String(summary.skipped).padStart(3)} â”‚ ${status} â”‚`,
-      );
-
-      totalAll += summary.total;
-      passedAll += summary.passed;
-      failedAll += summary.failed;
-      skippedAll += summary.skipped;
-    }
-
-    console.log(
-      "â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤",
-    );
-    const overallPassRate =
-      totalAll > 0 ? ((passedAll / totalAll) * 100).toFixed(1) : 0;
-    console.log(
-      `â”‚ ${"OVERALL".padEnd(35)} â”‚ Total: ${String(totalAll).padStart(3)} â”‚ Pass: ${String(passedAll).padStart(3)} â”‚ Fail: ${String(failedAll).padStart(3)} â”‚ Skip: ${String(skippedAll).padStart(3)} â”‚ ${overallPassRate}% â”‚`,
-    );
-    console.log(
-      "â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜",
-    );
-
+    // Step 3: Show summary
     const endTime = Date.now();
     const totalTimeSeconds = (endTime - startTime) / 1000;
-    const tps = totalAll > 0 ? totalAll / totalTimeSeconds : 0;
+    const passRate =
+      TOTAL_TRANSACTIONS > 0
+        ? ((passed / TOTAL_TRANSACTIONS) * 100).toFixed(1)
+        : 0;
 
-    console.log(`
-â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-â•‘                         ðŸ“Š RESULTS                                â•‘
-â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£
-â•‘  Total Pay-Ins:      ${String(totalAll).padStart(8)}                                           â•‘
-â•‘  Passed:             ${String(passedAll).padStart(8)}                                           â•‘
-â•‘  Failed:             ${String(failedAll).padStart(8)}                                           â•‘
-â•‘  Skipped:            ${String(skippedAll).padStart(8)}                                           â•‘
-â•‘  Pass Rate:          ${String(overallPassRate).padStart(8)}%                                          â•‘
-â•‘  Total Time:         ${String(totalTimeSeconds.toFixed(2)).padStart(8)} seconds                                  â•‘
-â•‘  TPS:                ${String(tps.toFixed(2)).padStart(8)} transactions/second                           â•‘
-â•‘  Webhooks:           âŒ NOT TRIGGERED                                 â•‘
-â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    `);
+    // Step 4: Get DB status counts
+    logInfo("ðŸ“¡ Fetching DB status counts...");
+    const { counts, currentMaxId } = await getDbStatusCounts(lastMaxId);
 
+    logSection("ðŸ“Š TEST SUMMARY");
+
+    const summaryText = `
+            Total Transactions:  ${TOTAL_TRANSACTIONS}
+            Passed:              ${passed}
+            Failed:              ${failed}
+            Pass Rate:           ${passRate}%
+            Total Time:          ${totalTimeSeconds.toFixed(2)} seconds
+            TPS:                 ${(TOTAL_TRANSACTIONS / totalTimeSeconds).toFixed(2)}
+
+            DB Status Count:
+            Success:             ${counts.SUCCESS}
+            Failed:              ${counts.FAILED}
+            Pending:             ${counts.PENDING}
+            Total New Records:   ${counts.total}
+            ============================================================
+            `;
+
+    console.log(summaryText);
+
+    // Step 5: Append to payin-test.txt with test counter
+    appendToPayinTestFile(summaryText, testCounter);
+
+    // Step 6: Save new max ID
+    if (currentMaxId > lastMaxId) {
+      writeLastMaxId(currentMaxId);
+    }
+
+    // Step 7: Save report JSON
     const fs = require("fs");
     const path = require("path");
     const reportDir = path.join(__dirname, "../../reports");
@@ -1671,44 +1891,49 @@ async function testPayInOnly() {
 
     const report = {
       timestamp: new Date().toISOString(),
-      type: "PAY-IN ONLY - NO WEBHOOKS",
+      type: "SIMPLE PAY-IN + WEBHOOK TEST (FAST MODE)",
+      user: USER_EMAIL,
+      testCounter: testCounter,
+      lastMaxId: lastMaxId,
+      currentMaxId: currentMaxId,
       configuration: {
-        gateways: ALLOWED_GATEWAYS,
-        paymentModes: ALL_PAYMENT_MODES,
-        iterationsPerMode: ITERATIONS_PER_MODE,
-        merchants: merchants.length,
+        totalTransactions: TOTAL_TRANSACTIONS,
+        paymentModes: PAYMENT_MODES,
+        minAmount: MIN_AMOUNT,
+        maxAmount: MAX_AMOUNT,
+        customerDelay: `${CUSTOMER_PAYMENT_MIN / 1000}-${CUSTOMER_PAYMENT_MAX / 1000}s (FAST)`,
+        gatewayDelay: `${GATEWAY_WEBHOOK_MIN / 1000}-${GATEWAY_WEBHOOK_MAX / 1000}s (FAST)`,
+        maxConcurrentWebhooks: MAX_CONCURRENT_WEBHOOKS,
       },
-      merchants: merchantResults,
+      results: results,
+      dbStatusCounts: counts,
       summary: {
-        totalTransactions: totalAll,
-        passed: passedAll,
-        failed: failedAll,
-        skipped: skippedAll,
-        passRate: `${overallPassRate}%`,
-        tps: tps.toFixed(2),
-        webhooksTriggered: false,
+        total: TOTAL_TRANSACTIONS,
+        passed: passed,
+        failed: failed,
+        passRate: `${passRate}%`,
+        totalTimeSeconds: totalTimeSeconds,
+        tps: (TOTAL_TRANSACTIONS / totalTimeSeconds).toFixed(2),
       },
     };
 
     fs.writeFileSync(
-      path.join(reportDir, "payin-only-test-report.json"),
+      path.join(reportDir, "simple-payin-webhook-report.json"),
       JSON.stringify(report, null, 2),
     );
-    logSuccess(`ðŸ“„ Report saved to: reports/payin-only-test-report.json`);
+    logSuccess(`ðŸ“„ Report saved to: reports/simple-payin-webhook-report.json`);
 
     return report;
   } catch (error) {
     logError(`âŒ Test failed: ${error.message}`);
-    await closeDbConnection();
     throw error;
   }
 }
 
-// Run the test
 if (require.main === module) {
-  testPayInOnly()
+  runSimplePayinWebhookTest()
     .then(() => {
-      console.log("\nâœ… Pay-In Only test completed!");
+      console.log("\nâœ… Simple Pay-In + Webhook test completed!");
       process.exit(0);
     })
     .catch((error) => {
@@ -1717,7 +1942,7 @@ if (require.main === module) {
     });
 }
 
-module.exports = { testPayInOnly };
+module.exports = { runSimplePayinWebhookTest };
 ==================== C:\Users\DELL\Desktop\Automation\src\tests\unified-routing-test.js ====================
 const { loginUser } = require("../api/auth");
 const { createPayIn } = require("../api/payin");
@@ -1746,7 +1971,7 @@ const MAX_CONCURRENT_WEBHOOKS = 10;
 
 async function withConcurrencyLimit(fn) {
   while (activeWebhooks >= MAX_CONCURRENT_WEBHOOKS) {
-    await new Promise((resolve) => setTimeout(resolve, 100)); // Wait 100ms
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
   activeWebhooks++;
   try {
@@ -1757,11 +1982,33 @@ async function withConcurrencyLimit(fn) {
 }
 
 // ============== CONFIGURATION ==============
-const ALLOWED_GATEWAYS = [10];
+const ALLOWED_GATEWAYS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15];
 const ALL_PAYMENT_MODES = ["UPI", "CARD"];
 const ITERATIONS_PER_MODE = parseInt(process.env.ITERATIONS_PER_MODE) || 10;
 const MIN_AMOUNT = parseInt(process.env.MIN_AMOUNT) || 1000;
 const MAX_AMOUNT = parseInt(process.env.MAX_AMOUNT) || 10000;
+
+// ============== REALISTIC DELAY CONFIGURATION ==============
+const DELAY_BETWEEN_PAYINS_MIN =
+  parseInt(process.env.DELAY_BETWEEN_PAYINS_MIN) || 500;
+const DELAY_BETWEEN_PAYINS_MAX =
+  parseInt(process.env.DELAY_BETWEEN_PAYINS_MAX) || 3000;
+const CUSTOMER_PAYMENT_MIN = parseInt(process.env.CUSTOMER_PAYMENT_MIN) || 5000;
+const CUSTOMER_PAYMENT_MAX =
+  parseInt(process.env.CUSTOMER_PAYMENT_MAX) || 60000;
+const GATEWAY_WEBHOOK_MIN = parseInt(process.env.GATEWAY_WEBHOOK_MIN) || 1000;
+const GATEWAY_WEBHOOK_MAX = parseInt(process.env.GATEWAY_WEBHOOK_MAX) || 10000;
+
+// ============== HELPER FUNCTIONS ==============
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+async function randomDelay(min, max) {
+  const delay = randomInt(min, max);
+  await new Promise((resolve) => setTimeout(resolve, delay));
+  return delay;
+}
 
 // Retry function for API calls
 async function createPayInWithRetry(
@@ -1813,7 +2060,7 @@ function getUserForMerchant(merchantId) {
 }
 
 /**
- *  Test a single merchant
+ * Test a single merchant
  */
 async function testMerchant(merchantConfig) {
   const { merchantId, merchantName, routingStrategy, paymentModeMap } =
@@ -1900,6 +2147,15 @@ async function testMerchant(merchantConfig) {
     const promises = [];
 
     for (let i = 0; i < ITERATIONS_PER_MODE; i++) {
+      // ========== REALISTIC: Random delay between pay-in creations ==========
+      if (i > 0) {
+        const delayMs = await randomDelay(
+          DELAY_BETWEEN_PAYINS_MIN,
+          DELAY_BETWEEN_PAYINS_MAX,
+        );
+        logInfo(`â³ Waiting ${delayMs}ms before next pay-in creation...`);
+      }
+
       const amount = randomAmountInMultiples(MIN_AMOUNT, MAX_AMOUNT);
       const customer = randomCustomer();
       const merchantReference = `ORD-UNI-${merchantId}-${paymentMode}-${Date.now()}-${i}`;
@@ -1911,8 +2167,15 @@ async function testMerchant(merchantConfig) {
         merchantReference,
       })
         .then(async (payInResult) => {
-          logInfo(`ðŸ”” Waiting 5 seconds before webhook...`);
-          await new Promise((resolve) => setTimeout(resolve, 5000));
+          // ========== REALISTIC: Customer takes time to pay (5-60 seconds) ==========
+          const customerDelay = await randomDelay(
+            CUSTOMER_PAYMENT_MIN,
+            CUSTOMER_PAYMENT_MAX,
+          );
+          logInfo(`ðŸ‘¤ Customer took ${customerDelay}ms to complete payment...`);
+
+          // ========== REALISTIC: Gateway takes time to send webhook (1-10 seconds) ==========
+          // This delay is now inside triggerWebhookForPayIn
 
           logInfo(`ðŸ”” Triggering webhook for ${merchantReference}...`);
 
@@ -1921,9 +2184,12 @@ async function testMerchant(merchantConfig) {
 
           for (let attempt = 1; attempt <= 3; attempt++) {
             try {
+              // Pass the gateway delay parameters to triggerWebhookForPayIn
               const result = await triggerWebhookForPayIn(
                 payInResult,
                 "SUCCESS",
+                GATEWAY_WEBHOOK_MIN,
+                GATEWAY_WEBHOOK_MAX,
               );
               if (result && result.success) {
                 webhookSuccess = true;
@@ -1975,6 +2241,8 @@ async function testMerchant(merchantConfig) {
             isCorrect,
             passed: isCorrect && webhookSuccess,
             webhookSuccess: webhookSuccess,
+            customerDelay: customerDelay,
+            gatewayDelay: 0, // Will be filled later
             feeAmount: payInResult.response.feeAmount,
             taxAmount: payInResult.response.taxAmount,
             amountToCredit: payInResult.response.amountToCredit,
@@ -1995,6 +2263,8 @@ async function testMerchant(merchantConfig) {
             isCorrect: false,
             passed: false,
             webhookSuccess: false,
+            customerDelay: 0,
+            gatewayDelay: 0,
             feeAmount: null,
             taxAmount: null,
             amountToCredit: null,
@@ -2006,6 +2276,7 @@ async function testMerchant(merchantConfig) {
       promises.push(promise);
     }
 
+    // ========== Wait for all promises in this payment mode ==========
     const results = await Promise.all(promises);
 
     let modePassed = 0,
@@ -2068,17 +2339,21 @@ async function testMerchant(merchantConfig) {
 async function testUnifiedRouting() {
   const startTime = Date.now();
 
-  logSection("ðŸš€ UNIFIED ROUTING TEST - ALL MERCHANTS 1-10");
+  logSection("ðŸš€ UNIFIED ROUTING TEST - ALL MERCHANTS 1-15 (REALISTIC MODE)");
 
   console.log(`
   â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
-  â•‘  CONFIGURATION                                                    â•‘
+  â•‘  CONFIGURATION (REALISTIC)                                        â•‘
   â•‘  â”œâ”€â”€ Gateways: Razorpay, Cashfree, Adyen, Chargebee, Bennupay,   â•‘
   â•‘  â”‚              SabPaisa, Stripe, PayU                           â•‘
   â•‘  â”œâ”€â”€ Payment Modes: UPI, CARD                                    â•‘
   â•‘  â”œâ”€â”€ Iterations per mode: ${ITERATIONS_PER_MODE}                                  â•‘
   â•‘  â”œâ”€â”€ Amount range: â‚¹${MIN_AMOUNT} - â‚¹${MAX_AMOUNT} (multiples of 1000)           â•‘
-  â•‘  â””â”€â”€ Merchants: 1 to 10                                          â•‘
+  â•‘  â”œâ”€â”€ Merchants: 1 to 15                                          â•‘
+  â•‘  â”œâ”€â”€ Delay between pay-ins: ${DELAY_BETWEEN_PAYINS_MIN}-${DELAY_BETWEEN_PAYINS_MAX}ms          â•‘
+  â•‘  â”œâ”€â”€ Customer payment time: ${CUSTOMER_PAYMENT_MIN / 1000}-${CUSTOMER_PAYMENT_MAX / 1000}s        â•‘
+  â•‘  â”œâ”€â”€ Gateway webhook delay: ${GATEWAY_WEBHOOK_MIN / 1000}-${GATEWAY_WEBHOOK_MAX / 1000}s        â•‘
+  â•‘  â””â”€â”€ Max concurrent webhooks: ${MAX_CONCURRENT_WEBHOOKS}                                   â•‘
   â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   `);
 
@@ -2087,7 +2362,7 @@ async function testUnifiedRouting() {
     const rawData = await getRoutingConfig();
 
     if (rawData.length === 0) {
-      logError("âŒ No routing configuration found for merchants 1-10");
+      logError("âŒ No routing configuration found for merchants 1-15");
       await closeDbConnection();
       return { error: "No configuration found" };
     }
@@ -2175,6 +2450,12 @@ async function testUnifiedRouting() {
         iterationsPerMode: ITERATIONS_PER_MODE,
         minAmount: MIN_AMOUNT,
         maxAmount: MAX_AMOUNT,
+        realisticDelays: {
+          delayBetweenPayins: `${DELAY_BETWEEN_PAYINS_MIN}-${DELAY_BETWEEN_PAYINS_MAX}ms`,
+          customerPayment: `${CUSTOMER_PAYMENT_MIN / 1000}-${CUSTOMER_PAYMENT_MAX / 1000}s`,
+          gatewayWebhook: `${GATEWAY_WEBHOOK_MIN / 1000}-${GATEWAY_WEBHOOK_MAX / 1000}s`,
+          maxConcurrentWebhooks: MAX_CONCURRENT_WEBHOOKS,
+        },
       },
       tpsMetrics: {
         totalTransactions: totalAll,
@@ -2313,7 +2594,6 @@ module.exports = {
   logSection,
 };
 ==================== C:\Users\DELL\Desktop\Automation\src\utils\random.js ====================
-// International Names
 const firstNames = [
   "John",
   "Emma",
@@ -2508,13 +2788,23 @@ module.exports = {
   random,
 };
 ==================== C:\Users\DELL\Desktop\Automation\src\utils\webhook-trigger.js ====================
-// utils/webhook-trigger.js
 const axios = require("axios");
 const config = require("../config");
 const { logInfo, logSuccess, logError } = require("./logger");
 
+// ============== HELPER FUNCTIONS ==============
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+async function randomDelay(min, max) {
+  const delay = randomInt(min, max);
+  await new Promise((resolve) => setTimeout(resolve, delay));
+  return delay;
+}
+
 /**
- * â­ NEW: Detect gateway from intent JSON
+ * Detect gateway from intent JSON
  */
 function detectGateway(response) {
   if (!response) return null;
@@ -2568,6 +2858,31 @@ function detectGateway(response) {
       if (intent.txnid) {
         return "PAYU";
       }
+
+      // CHILLPAY
+      if (intent.payLinkId || intent.payLinkToken || intent.PayLinkToken) {
+        return "CHILLPAY";
+      }
+
+      // SETU - check URL
+      if (response.url && response.url.includes("kaypay")) {
+        return "SETU";
+      }
+
+      // PAYSTACK
+      if (intent.accessCode || intent.reference) {
+        return "PAYSTACK";
+      }
+
+      // MOLLIE
+      if (intent.paymentId && intent.paymentId.startsWith("tr_")) {
+        return "MOLLIE";
+      }
+
+      // FLUTTERWAVE
+      if (intent.tx_ref || intent.checkoutUrl?.includes("flutterwave")) {
+        return "FLUTTERWAVE";
+      }
     } catch (e) {
       // Not JSON, continue with other checks
     }
@@ -2584,13 +2899,18 @@ function detectGateway(response) {
     if (url.includes("sabpaisa")) return "SABPAISA";
     if (url.includes("stripe")) return "STRIPE";
     if (url.includes("payu")) return "PAYU";
+    if (url.includes("chillpay")) return "CHILLPAY";
+    if (url.includes("kaypay")) return "SETU";
+    if (url.includes("checkout.paystack")) return "PAYSTACK";
+    if (url.includes("mollie.com")) return "MOLLIE";
+    if (url.includes("flutterwave")) return "FLUTTERWAVE";
   }
 
   return null;
 }
 
 /**
- * â­ NEW: Get webhook payload for specific gateway (matching current backend)
+ * Get webhook payload for specific gateway
  */
 function getWebhookPayload(
   gateway,
@@ -2897,21 +3217,192 @@ function getWebhookPayload(
         phone: customer.phone.replace(/[^0-9]/g, ""),
       };
 
+    case "CHILLPAY":
+      return {
+        OrderNo: merchantReference,
+        TransactionId: `CHP-TXN-${Math.random().toString(36).substr(2, 15)}`,
+        PaymentStatus: "0",
+        Amount: amount * 100,
+        BankRefCode: `BANK-REF-${Math.random().toString(36).substr(2, 10)}`,
+        PaymentChannel: paymentMode === "CARD" ? "CreditCard" : "UPI",
+        PaymentDateTime: new Date()
+          .toISOString()
+          .replace("T", " ")
+          .slice(0, 19),
+        Currency: "THB",
+        MerchantCode: "M038709",
+        PayLinkToken: Math.random().toString(36).substr(2, 10).toUpperCase(),
+        PayLinkId: Math.floor(Math.random() * 100000),
+        CardNumber: "411111******1111",
+        CardBank: "Bangkok Bank",
+        CardType: "Visa",
+        ChannelCode: "CC",
+        Installment: 0,
+        InterestType: "Zero",
+        InterestRate: 0,
+      };
+
+    case "SETU":
+      return {
+        events: [
+          {
+            id: `evt_${Math.random().toString(36).substr(2, 15)}`,
+            type: "BILL_FULFILMENT_STATUS",
+            timeStamp: new Date().toISOString(),
+            data: {
+              platformBillID: merchantReference,
+              billerBillID: merchantReference,
+              status: "PAYMENT_SUCCESSFUL",
+              amountPaid: {
+                value: amount * 100,
+                currency: "INR",
+              },
+              payerVpa: customer.email,
+              transactionId: Math.random().toString(36).substr(2, 15),
+              transactionNote: `Payment for ${merchantReference}`,
+              receiptId: Math.random().toString(36).substr(2, 15),
+              additionalInfo: {
+                merchantReference: merchantReference,
+                customerName: customer.name,
+                customerEmail: customer.email,
+              },
+            },
+          },
+        ],
+        partnerDetails: {
+          partnerId: `PARTNER_${Math.random().toString(36).substr(2, 5)}`,
+          partnerName: "Test Partner",
+        },
+      };
+
+    case "PAYSTACK":
+      return {
+        event: "charge.success",
+        data: {
+          id: Math.floor(Math.random() * 10000000),
+          domain: "live",
+          status: "success",
+          reference: `${merchantReference}_${Date.now()}`,
+          amount: amount * 100,
+          message: null,
+          gateway_response: "Approved",
+          paid_at: new Date(Date.now() + 60000).toISOString(),
+          created_at: new Date().toISOString(),
+          channel: paymentMode.toLowerCase(),
+          currency: "NGN",
+          ip_address: "127.0.0.1",
+          metadata: {
+            merchant_reference: merchantReference,
+            customer_name: customer.name,
+            customer_email: customer.email,
+          },
+          authorization: {
+            authorization_code: `AUTH_${Math.random().toString(36).substr(2, 10)}`,
+            bin: "539999",
+            last4: "1234",
+            exp_month: "12",
+            exp_year: "2028",
+            channel: "card",
+            card_type: "visa",
+            bank: "TEST BANK",
+            country_code: "NG",
+            brand: "visa",
+            reusable: true,
+            signature: `SIG_${Math.random().toString(36).substr(2, 10)}`,
+          },
+          customer: {
+            id: Math.floor(Math.random() * 1000000),
+            first_name: customer.name.split(" ")[0] || "User",
+            last_name: customer.name.split(" ")[1] || "Test",
+            email: customer.email,
+            customer_code: `CUS_${Math.random().toString(36).substr(2, 10)}`,
+            phone: customer.phone,
+            risk_action: "default",
+          },
+        },
+      };
+
+    case "MOLLIE":
+      return {
+        id: `tr_${Math.random().toString(36).substr(2, 10)}`,
+        mode: "live",
+        createdAt: new Date().toISOString(),
+        amount: {
+          value: amount.toFixed(2),
+          currency: "EUR",
+        },
+        description: `Payment for ${merchantReference}`,
+        method: paymentMode.toLowerCase(),
+        status: "paid",
+        paidAt: new Date(Date.now() + 60000).toISOString(),
+        metadata: {
+          merchant_reference: merchantReference,
+          order_id: merchantReference,
+        },
+        details: {
+          cardNumber: "**** **** **** 1234",
+          cardHolder: customer.name,
+          cardAudience: "consumer",
+          cardLabel: paymentMode === "CARD" ? "Visa" : "UPI",
+          cardCountryCode: "NL",
+        },
+        _links: {
+          self: {
+            href: `https://api.mollie.com/v2/payments/tr_${Math.random().toString(36).substr(2, 10)}`,
+            type: "application/hal+json",
+          },
+        },
+      };
+
+    case "FLUTTERWAVE":
+      return {
+        event: "charge.completed",
+        data: {
+          tx_ref: `${merchantReference}_${Date.now()}`,
+          flw_ref: `FLW-TEST-${Math.random().toString(36).substr(2, 10)}`,
+          amount: amount,
+          currency: "NGN",
+          status: "successful",
+          meta: {
+            merchant_reference: merchantReference,
+            customer_name: customer.name,
+            customer_email: customer.email,
+          },
+          customer: {
+            email: customer.email,
+            name: customer.name,
+            phonenumber: customer.phone,
+          },
+        },
+      };
+
     default:
       return null;
   }
 }
 
 /**
- * â­ UPDATED: Trigger webhook for a pay-in
+ * Trigger webhook for a pay-in
+ * @param {object} payInResult - The pay-in result object
+ * @param {string} forceStatus - Force status (optional)
+ * @param {number} gatewayDelayMin - Minimum gateway delay in ms (default: 1000)
+ * @param {number} gatewayDelayMax - Maximum gateway delay in ms (default: 10000)
  */
-async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
-  await new Promise((resolve) => setTimeout(resolve, 5000));
+async function triggerWebhookForPayIn(
+  payInResult,
+  forceStatus = null,
+  gatewayDelayMin = 1000,
+  gatewayDelayMax = 10000,
+) {
+  // ========== REALISTIC: Gateway takes time to send webhook (1-10 seconds) ==========
+  const gatewayDelay = await randomDelay(gatewayDelayMin, gatewayDelayMax);
+  logInfo(`ðŸŒ Gateway took ${gatewayDelay}ms to send webhook...`);
+
   const { request, response } = payInResult;
   const { merchantReference, paymentMode, customer } = request;
   const amount = request.amount;
 
-  // â­ Detect gateway from intent
+  // Detect gateway from intent
   const gateway = detectGateway(response);
 
   if (!gateway) {
@@ -2946,6 +3437,11 @@ async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
     SABPAISA: config.API_PATHS.WEBHOOKS.SABPAISA,
     STRIPE: config.API_PATHS.WEBHOOKS.STRIPE,
     PAYU: config.API_PATHS.WEBHOOKS.PAYU,
+    CHILLPAY: config.API_PATHS.WEBHOOKS.CHILLPAY,
+    SETU: config.API_PATHS.WEBHOOKS.SETU,
+    PAYSTACK: config.API_PATHS.WEBHOOKS.PAYSTACK,
+    MOLLIE: config.API_PATHS.WEBHOOKS.MOLLIE,
+    FLUTTERWAVE: config.API_PATHS.WEBHOOKS.FLUTTERWAVE,
   };
 
   const webhookUrl = `${config.BASE_URL}${webhookUrls[gateway]}`;
@@ -2965,6 +3461,7 @@ async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
       gateway,
       status: "SUCCESS",
       success: true,
+      gatewayDelay: gatewayDelay,
       response: webhookResponse.data,
     };
   } catch (error) {
@@ -2977,6 +3474,7 @@ async function triggerWebhookForPayIn(payInResult, forceStatus = null) {
       gateway,
       status: "FAILED",
       success: false,
+      gatewayDelay: gatewayDelay,
       error: error.message,
     };
   }
@@ -2986,4 +3484,283 @@ module.exports = {
   triggerWebhookForPayIn,
   detectGateway,
   getWebhookPayload,
+};
+==================== C:\Users\DELL\Desktop\Automation\src\validators\response.js ====================
+const {
+  logger,
+  logSuccess,
+  logError,
+  logInfo,
+  logWarning,
+} = require("../utils/logger");
+
+// UPDATED GATEWAY MAP with all new gateways
+const GATEWAY_MAP = {
+  1: { id: 1, name: "Razorpay", keyPatterns: ["rzp_test"] },
+  2: { id: 2, name: "Cashfree", keyPatterns: ["cashfree", "cf_"] },
+  3: { id: 3, name: "Adyen", keyPatterns: ["adyen"] },
+  4: { id: 4, name: "ChargeBee", keyPatterns: ["chargebee", "cb_", "ch_"] },
+  5: { id: 5, name: "Bennupay", keyPatterns: ["bennupay", "bp_"] },
+  6: { id: 6, name: "SabPaisa", keyPatterns: ["sppay_", "sabpaisa"] },
+  7: {
+    id: 7,
+    name: "Chillpay",
+    keyPatterns: ["chillpay", "CHP-TXN", "PayLinkToken"],
+  },
+  8: {
+    id: 8,
+    name: "Setu",
+    keyPatterns: ["setu", "platformBillID", "billerBillID"],
+  },
+  9: { id: 9, name: "Stripe", keyPatterns: ["stripe", "cs_test_"] },
+  10: { id: 10, name: "PayU", keyPatterns: ["payu", "txnid"] },
+  12: {
+    id: 12,
+    name: "Paystack",
+    keyPatterns: ["paystack", "checkout.paystack"],
+  },
+  14: { id: 14, name: "Mollie", keyPatterns: ["mollie", "mollie.com"] },
+  15: {
+    id: 15,
+    name: "Flutterwave",
+    keyPatterns: ["flutterwave", "checkout-v2.dev-flutterwave"],
+  },
+};
+
+function detectGatewayId(response) {
+  if (!response) return null;
+
+  if (response.intent) {
+    try {
+      let intent = response.intent;
+      if (typeof intent === "string") {
+        intent = JSON.parse(intent);
+      }
+
+      // Razorpay
+      if (intent.key && intent.key.startsWith("rzp_test")) {
+        return 1;
+      }
+
+      // Cashfree
+      if (intent.paymentSessionId) {
+        return 2;
+      }
+
+      // Adyen
+      if (intent.sessionId && intent.sessionId.startsWith("CS")) {
+        return 3;
+      }
+
+      // Chargebee
+      if (intent.hostedPageId) {
+        return 4;
+      }
+
+      // Bennupay
+      if (intent.purchaseId) {
+        return 5;
+      }
+
+      // SabPaisa
+      if (intent.paymentId && intent.paymentId.startsWith("sppay_")) {
+        return 6;
+      }
+
+      // CHILLPAY
+      if (intent.payLinkId || intent.payLinkToken || intent.PayLinkToken) {
+        return 7;
+      }
+
+      // SETU - no specific intent, check URL
+      if (response.url && response.url.includes("kaypay")) {
+        return 8;
+      }
+
+      // Stripe
+      if (intent.sessionId && intent.sessionId.startsWith("cs_test_")) {
+        return 9;
+      }
+
+      // PayU
+      if (intent.txnid) {
+        return 10;
+      }
+
+      // PAYSTACK
+      if (intent.accessCode || intent.reference) {
+        return 12;
+      }
+
+      // MOLLIE
+      if (intent.paymentId && intent.paymentId.startsWith("tr_")) {
+        return 14;
+      }
+
+      // FLUTTERWAVE
+      if (intent.tx_ref || intent.checkoutUrl?.includes("flutterwave")) {
+        return 15;
+      }
+    } catch (e) {
+      // Not JSON, continue
+    }
+  }
+
+  // Fallback: check URL
+  if (response.url) {
+    const url = response.url.toLowerCase();
+    if (url.includes("rzp.io")) return 1;
+    if (url.includes("cashfree")) return 2;
+    if (url.includes("adyen")) return 3;
+    if (url.includes("chargebee")) return 4;
+    if (url.includes("bennupay")) return 5;
+    if (url.includes("sabpaisa")) return 6;
+    if (url.includes("chillpay")) return 7;
+    if (url.includes("kaypay")) return 8;
+    if (url.includes("stripe")) return 9;
+    if (url.includes("payu")) return 10;
+    if (url.includes("checkout.paystack")) return 12;
+    if (url.includes("mollie.com")) return 14;
+    if (url.includes("flutterwave")) return 15;
+  }
+
+  return null;
+}
+
+function getGatewayName(gatewayId) {
+  return GATEWAY_MAP[gatewayId]?.name || `Unknown (${gatewayId})`;
+}
+
+function validatePayInResponse(response, request, expectedGatewayId) {
+  const result = {
+    valid: true,
+    errors: [],
+    warnings: [],
+    detectedGatewayId: null,
+    detectedGatewayName: null,
+  };
+
+  if (!response.id) {
+    result.valid = false;
+    result.errors.push("Missing transaction ID");
+  }
+
+  if (!response.status) {
+    result.valid = false;
+    result.errors.push("Missing status");
+  }
+
+  if (response.merchantReference !== request.merchantReference) {
+    result.valid = false;
+    result.errors.push(
+      `Merchant reference mismatch: Expected ${request.merchantReference}, Got ${response.merchantReference}`,
+    );
+  }
+
+  if (parseFloat(response.amount) !== request.amount) {
+    result.warnings.push(
+      `Amount mismatch: Expected ${request.amount}, Got ${response.amount}`,
+    );
+  }
+
+  const detectedId = detectGatewayId(response);
+  result.detectedGatewayId = detectedId;
+  result.detectedGatewayName = detectedId
+    ? getGatewayName(detectedId)
+    : "Unknown";
+
+  if (detectedId && expectedGatewayId) {
+    if (detectedId !== expectedGatewayId) {
+      result.valid = false;
+      result.errors.push(
+        `Gateway mismatch: Expected ${getGatewayName(expectedGatewayId)} (ID: ${expectedGatewayId}), ` +
+          `Got ${getGatewayName(detectedId)} (ID: ${detectedId})`,
+      );
+    } else {
+      result.warnings.push(`âœ… Gateway correct: ${getGatewayName(detectedId)}`);
+    }
+  } else if (!detectedId && expectedGatewayId) {
+    result.warnings.push(
+      `Could not detect gateway, expected ${getGatewayName(expectedGatewayId)}`,
+    );
+  }
+
+  if (response.feeAmount !== undefined) {
+    result.warnings.push(`Fee Amount: â‚¹${response.feeAmount}`);
+  }
+  if (response.taxAmount !== undefined) {
+    result.warnings.push(`Tax Amount: â‚¹${response.taxAmount}`);
+  }
+  if (response.amountToCredit !== undefined) {
+    result.warnings.push(`Amount to Credit: â‚¹${response.amountToCredit}`);
+  }
+
+  return result;
+}
+
+function validateWebhookResponse(response) {
+  const result = {
+    valid: true,
+    errors: [],
+  };
+
+  if (!response || typeof response !== "object") {
+    result.valid = false;
+    result.errors.push("Invalid webhook response");
+    return result;
+  }
+
+  if (response.error) {
+    result.valid = false;
+    result.errors.push(response.error);
+  }
+
+  if (response.success === false) {
+    result.valid = false;
+    result.errors.push("Webhook processing failed");
+  }
+
+  if (response.message && response.message.includes("error")) {
+    result.valid = false;
+    result.errors.push(response.message);
+  }
+
+  return result;
+}
+
+function isRoutingCorrect(response, expectedGatewayId) {
+  const detectedId = detectGatewayId(response);
+  if (detectedId === null) {
+    return true;
+  }
+  return detectedId === expectedGatewayId;
+}
+
+function getRoutingInfo(response, expectedGatewayId) {
+  const detectedId = detectGatewayId(response);
+
+  return {
+    expectedGatewayId,
+    expectedGatewayName: expectedGatewayId
+      ? getGatewayName(expectedGatewayId)
+      : "Not specified",
+    detectedGatewayId: detectedId,
+    detectedGatewayName: detectedId ? getGatewayName(detectedId) : "Unknown",
+    isCorrect: detectedId ? detectedId === expectedGatewayId : null,
+    message: detectedId
+      ? detectedId === expectedGatewayId
+        ? `âœ… Correct gateway: ${getGatewayName(detectedId)}`
+        : `âŒ Gateway mismatch: Expected ${getGatewayName(expectedGatewayId)}, Got ${getGatewayName(detectedId)}`
+      : "âš ï¸ Could not detect gateway",
+  };
+}
+
+module.exports = {
+  validatePayInResponse,
+  validateWebhookResponse,
+  isRoutingCorrect,
+  detectGatewayId,
+  getGatewayName,
+  getRoutingInfo,
+  GATEWAY_MAP,
 };

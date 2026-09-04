@@ -28,7 +28,7 @@ pool.on("error", (err) => {
  * Get routing configuration for specific merchants
  */
 async function getRoutingConfig(merchantIds = null) {
-  const ids = merchantIds || [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  const ids = merchantIds || [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
   const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
 
   const query = `
